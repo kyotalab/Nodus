@@ -5,8 +5,8 @@
 //  PHASE 2: メモリ上のノート一覧と CRUD の入口（ダミーデータ）
 //
 
+import Combine
 import Foundation
-import SwiftUI
 
 /// ノート一覧の状態を保持し、ビューから `@EnvironmentObject` や `@ObservedObject` で参照する。
 @MainActor
@@ -15,8 +15,10 @@ final class NoteStore: ObservableObject {
     @Published var notes: [Note]
 
     /// 初期表示用のダミーデータを入れたストアを作る。
-    init(notes: [Note] = NoteStore.makeDummyNotes()) {
-        self.notes = notes
+    /// - Parameter notes: 省略時はダミー一覧。`nil` 以外を渡すとテスト等で差し替え可能。
+    /// - Note: デフォルト引数に `makeDummyNotes()` を書かない（呼び出し側の非分離コンテキストで評価されエラーになるため）。
+    init(notes: [Note]? = nil) {
+        self.notes = notes ?? Self.makeDummyNotes()
     }
 
     /// 現在時刻をファイル名の先頭 ID に使い、本文空の新規ノートを一覧の先頭に追加して返す。

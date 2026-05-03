@@ -12,6 +12,7 @@ struct NodusApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(NoteStore())
         }
     }
 }
