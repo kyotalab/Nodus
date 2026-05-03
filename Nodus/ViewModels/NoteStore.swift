@@ -46,30 +46,32 @@ final class NoteStore: ObservableObject {
 
     // MARK: - ダミーデータ
 
-    /// PHASE 2 用: 実在しうる過去のタイムスタンプと、Markdown を含む本文で 6 件分を返す。
+    /// PHASE 2 用: 実在しうる過去のタイムスタンプと、Markdown を含む本文で 6 件分を返す（英語、Nodus 向けサンプル）。
     private static func makeDummyNotes() -> [Note] {
         [
             Note(
                 id: UUID(),
                 filename: "202402101430.md",
                 body: """
-                # 最初のメモ
+                # Scratch note
 
-                まだ **タイトル** を付けていない下書き。`[[202403220915]]` へのリンクを試す。
+                Draft with **no title** in the filename yet. Try a wiki link to [[202403220915]] and another to [[202409301845]].
                 """,
                 createdAt: dateFromFilenamePrefix("202402101430"),
                 updatedAt: dateFromFilenamePrefix("202402101430")
             ),
             Note(
                 id: UUID(),
-                filename: "202403220915 SwiftUIとCompose.md",
+                filename: "202403220915 SwiftUI and Compose.md",
                 body: """
-                ## 比較
+                ## Comparison
 
-                - SwiftUI: 宣言的 UI
-                - Jetpack Compose: 同様の思想
+                - **SwiftUI**: declarative UI on Apple platforms
+                - **Jetpack Compose**: declarative UI on Android
 
-                > どちらも状態駆動で組み立てやすい。
+                > Both are state-driven and easy to compose.
+
+                See also [[202402101430]] for a scratch link target.
                 """,
                 createdAt: dateFromFilenamePrefix("202403220915"),
                 updatedAt: dateFromFilenamePrefix("202404011200")
@@ -78,32 +80,38 @@ final class NoteStore: ObservableObject {
                 id: UUID(),
                 filename: "202406011200.md",
                 body: """
-                短いメモ。`code` や *斜体* も混ぜる。
+                Short note mixing *italic*, inline `code`, and `[[202501051030]]` for link resolution tests.
                 """,
                 createdAt: dateFromFilenamePrefix("202406011200"),
                 updatedAt: dateFromFilenamePrefix("202406011200")
             ),
             Note(
                 id: UUID(),
-                filename: "202409301845 リンクとグラフ.md",
+                filename: "202409301845 Links and graph.md",
                 body: """
-                # 知識のつながり
+                # Linking notes
 
-                ノート同士を `[[202402101430]]` のように繋ぐと、後から検索しやすい。
+                Connect notes with wiki links like `[[202402101430]]` or `[[202403220915 SwiftUI and Compose]]` so **search** and navigation stay useful after renames.
+
+                > Partial IDs match filenames — good for Zettelkasten-style graphs.
                 """,
                 createdAt: dateFromFilenamePrefix("202409301845"),
                 updatedAt: dateFromFilenamePrefix("202410051030")
             ),
             Note(
                 id: UUID(),
-                filename: "202501051030 日々のメモ.md",
+                filename: "202501051030 Daily log.md",
                 body: """
-                - 買い物
-                - 読書 30 分
+                - Groceries
+                - Read for *30 minutes*
 
                 ```swift
-                let x = 1
+                struct Note: Identifiable {
+                    let id: UUID
+                }
                 ```
+
+                Backlink: [[202406011200]]
                 """,
                 createdAt: dateFromFilenamePrefix("202501051030"),
                 updatedAt: dateFromFilenamePrefix("202501051030")
@@ -112,7 +120,7 @@ final class NoteStore: ObservableObject {
                 id: UUID(),
                 filename: "202503151845.md",
                 body: """
-                タイムスタンプだけのファイル名の例。本文だけ日本語で書いておく。
+                Timestamp-only filename (`202503151845.md`). Body can still use **Markdown** and `[[202409301845]]` to exercise previews and link styling.
                 """,
                 createdAt: dateFromFilenamePrefix("202503151845"),
                 updatedAt: dateFromFilenamePrefix("202503201200")
