@@ -7,29 +7,33 @@
 
 import SwiftUI
 
-/// アプリ全体の分割レイアウトの起点。`NoteStore` は環境オブジェクトから取得する。
+/// アプリ全体の分割レイアウトの起点。`NoteStore` は一覧・詳細の解決の両方で参照する。
 struct ContentView: View {
-    /// 一覧・詳細で共有するノートストア（`NodusApp` で注入される想定）
     @EnvironmentObject private var store: NoteStore
+    /// 横並びの列が「レギュラー」かどうか（iPhone 縦は通常 `.compact`）
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// ユーザーが一覧で選んでいるノート。未選択時は詳細にプレースホルダーを出す。
-    @State private var selectedNote: Note?
+    /// iPad の Split では `Note` 丸ごとの `List(selection:)` がタグ一致に失敗することがあるため、`UUID` で選ぶ。
+    @State private var selectedNoteID: UUID?
 
     var body: some View {
-        // iPhone ではサイドバーが全画面、iPad では左ペインとして表示される。
-        NavigationSplitView {
-            // 左（サイドバー）: ノート一覧。選択状態は親が保持するバインディングで同期する。
-            NoteListView(selectedNote: $selectedNote)
-        } detail: {
-            // 右（詳細）: 選択の有無で中身を切り替える。
-            detailPane
+        Group {
+            if horizontalSizeClass == .regular {
+                NavigationSplitView {
+                    NoteListView(style: .splitSidebar(selection: $selectedNoteID))
+                } detail: {
+                    detailPane
+                }
+            } else {
+                NoteListView(style: .compactStack)
+            }
         }
     }
 
-    /// 詳細ペインの中身。ノートが選ばれていれば詳細ビュー、そうでなければ空選択用ビュー。
+    /// 詳細ペイン。選択 ID に対応する `Note` をストアから引き直す（一覧と常に同じインスタンスを指す）。
     @ViewBuilder
     private var detailPane: some View {
-        if let note = selectedNote {
+        if let id = selectedNoteID, let note = store.notes.first(where: { $0.id == id }) {
             NoteDetailView(note: note)
         } else {
             EmptySelectionView()

@@ -2,33 +2,60 @@
 //  NoteListView.swift
 //  Nodus
 //
-//  PHASE 2: ContentView からの呼び出しに応じる最小の一覧（本実装は後続フェーズ）
+//  PHASE 2: 一覧のみ。表示モードは親が `horizontalSizeClass` に応じて選ぶ。
 //
 
 import SwiftUI
 
-/// サイドバー用のノート一覧。選択中ノートは親の `@State` とバインディングで共有する。
+/// ノート一覧。iPad 等では `List(selection:)` で Split の詳細と同期し、
+/// iPhone（コンパクト幅）では `NavigationLink` でスタック遷移する。
 struct NoteListView: View {
-    @EnvironmentObject private var store: NoteStore
-    @Binding var selectedNote: Note?
-
-    var body: some View {
-        List {
-            ForEach(store.notes) { note in
-                Button {
-                    selectedNote = note
-                } label: {
-                    Text(rowLabel(for: note))
-                }
-                .foregroundStyle(.primary)
-            }
-        }
-        .navigationTitle("ノート")
+    /// 一覧の出し分け（`Binding` を含むため `Equatable` にはしない）
+    enum Style {
+        /// `NavigationSplitView` のサイドバー用。選択は `UUID?` で行い、詳細側で `Note` を引き直す。
+        case splitSidebar(selection: Binding<UUID?>)
+        /// iPhone 向け。内側の `NavigationStack` でプッシュ遷移する。
+        case compactStack
     }
 
-    /// 一覧行に出す文字列（タイトルがあればそれ、なければタイムスタンプ ID）
-    private func rowLabel(for note: Note) -> String {
-        let title = note.title
-        return title.isEmpty ? note.timestampID : title
+    @EnvironmentObject private var store: NoteStore
+    let style: Style
+
+    var body: some View {
+        switch style {
+        case .splitSidebar(let selection):
+            splitSidebarList(selection: selection)
+        case .compactStack:
+            compactStackList
+        }
+    }
+
+    /// iPad / ワイド: 選択型は `UUID?` にして `List` のタグと確実に一致させる。
+    private func splitSidebarList(selection: Binding<UUID?>) -> some View {
+        NavigationStack {
+            List(selection: selection) {
+                ForEach(store.notes) { note in
+                    Text(note.displayName)
+                        .tag(Optional(note.id))
+                }
+            }
+            .navigationTitle("Notes")
+        }
+    }
+
+    /// iPhone 等: `NavigationLink` で `NoteDetailView` へプッシュ
+    private var compactStackList: some View {
+        NavigationStack {
+            List {
+                ForEach(store.notes) { note in
+                    NavigationLink {
+                        NoteDetailView(note: note)
+                    } label: {
+                        Text(note.displayName)
+                    }
+                }
+            }
+            .navigationTitle("Notes")
+        }
     }
 }

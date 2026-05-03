@@ -57,7 +57,7 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 
 ## UI Structure
 - **Layout**: `NavigationSplitView` (auto-adapts: sidebar on iPad, push navigation on iPhone)
-- **Note List**: Title only (high density, no preview)
+- **Note List**: Filename without extension (e.g. `202403220915 SwiftUI basics`) — same display as The Archive
 - **Sort Options**: Updated date / Created date / Title (A-Z) / Most linked / Random
 
 ## Visual Design
@@ -195,3 +195,11 @@ Nodus/
 - Keep views small and composable
 - No force unwrapping (`!`) without explicit comment explaining why it's safe
 - Core/ files must be pure functions with no SwiftUI or UIKit imports
+
+### UI Language
+- All UI text (navigation titles, button labels, empty states, alerts) must be in English
+- Note content written by the user may be in any language
+- Examples:
+  - ✅ "Notes" not "ノート"
+  - ✅ "Delete" not "削除"
+  - ✅ "Nothing found for..." not "見つかりません"

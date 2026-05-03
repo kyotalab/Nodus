@@ -84,7 +84,8 @@ I'm building Nodus, a SwiftUI Zettelkasten app (see 00_project.md).
 Create NoteListView.swift in Views/.
 This view:
 - Receives [Note] from NoteStore via @EnvironmentObject
-- Shows a plain List of note titles (filename without extension)
+- Shows a plain List of notes; each row uses note.displayName (filename without extension, The Archive style). Row label doc:
+  /// 一覧行に出す文字列 — 拡張子を除いたファイル名をそのまま表示（The Archive方式）
 - Has a search bar at the top (filter by filename only for now)
 - Has a + button in the toolbar that calls NoteStore.createNote()
 No navigation logic yet — just the list UI.

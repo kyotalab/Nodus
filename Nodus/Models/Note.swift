@@ -8,7 +8,8 @@
 import Foundation
 
 /// 1件のノートを表すモデル。リスト表示や詳細画面の識別に `Identifiable` を使う。
-struct Note: Identifiable {
+/// `List(selection:)` など分割ビューとの連携のため `Hashable` に準拠する。
+struct Note: Identifiable, Hashable {
     /// SwiftUI の `List` などで行を一意に識別するための ID（ファイルとは別の安定キー）
     let id: UUID
 
@@ -28,6 +29,11 @@ struct Note: Identifiable {
     /// 仕様上は `YYYYMMDDHHmm` の 12 桁を想定するが、ここでは文字列として先頭 12 文字を返すだけに留める。
     var timestampID: String {
         String(filename.prefix(12))
+    }
+
+    /// 拡張子を除いたファイル名をそのまま返す（一覧表示は The Archive と同様にこの文字列を使う）。
+    var displayName: String {
+        Self.stemByRemovingMarkdownExtension(from: filename)
     }
 
     /// 拡張子 `.md` を除いたファイル名から、先頭 12 文字（タイムスタンプ）より後ろをタイトルとみなす。
