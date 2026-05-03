@@ -1,0 +1,197 @@
+# Nodus - Project Specification
+> This file is always active. Read this before every task.
+
+## App Identity
+- **Name**: Nodus
+- **Subtitle**: Plain text, connected thinking
+- **Concept**: A Zettelkasten note-taking app for iOS inspired by The Archive (macOS)
+- **Target Users**: Users of Zettlr, The Archive, or Obsidian who want something simpler
+
+## Philosophy
+Notes follow a cycle: Write → Link → Think → Output → Write again.
+This loop is the core experience. Every design decision should support it.
+
+## Tech Stack
+- **Language**: Swift
+- **UI Framework**: SwiftUI
+- **Minimum Deployment Target**: iOS 17+
+- **Persistence**: Plain text files via iCloud Drive (ubiquity container)
+- **External Dependencies**: None (avoid unless absolutely necessary)
+
+## File Specification
+| Item | Detail |
+|------|--------|
+| Format | Markdown plain text |
+| Extension | `.md` |
+| Naming | `YYYYMMDDHHmm タイトル.md` |
+| Note ID | 12-digit timestamp (e.g. `202604271321`) |
+| Storage | iCloud Drive (user-visible folder) |
+
+### Naming Examples
+```
+202604271321.md                          ← ID only (just created)
+202604271321 Structured contexts.md      ← ID + title (renamed later)
+```
+
+## Wiki Link Specification
+| Item | Detail |
+|------|--------|
+| Syntax | `[[ID]]` e.g. `[[202604271321]]` |
+| Resolution | Partial match against filename |
+| Rationale | Links survive title renames |
+
+### Link Resolution Logic
+```swift
+// Pseudocode
+func resolveLink(_ id: String, in notes: [Note]) -> Note? {
+    notes.first { $0.filename.contains(id) }
+}
+```
+
+## Search Specification
+| Item | Detail |
+|------|--------|
+| Scope | Filename + full body text |
+| Method | Space-separated AND search |
+| Example | `swift note` → files containing both "swift" AND "note" |
+
+## UI Structure
+- **Layout**: `NavigationSplitView` (auto-adapts: sidebar on iPad, push navigation on iPhone)
+- **Note List**: Title only (high density, no preview)
+- **Sort Options**: Updated date / Created date / Title (A-Z) / Most linked / Random
+
+## Visual Design
+- **Color Theme**: System-adaptive (automatic Dark / Light mode)
+- **Editor Font**: Monospaced (SF Mono or system monospaced)
+- **Editor Font Size**: iOS Dynamic Type (follows user system setting)
+- **Preview Style**: Minimal — headings slightly larger/bolder, otherwise plain
+- **Wiki Link Color**: System blue (resolved) / System gray (broken)
+
+## Empty States
+| State | Display |
+|-------|---------|
+| No notes (first launch) | "Your knowledge network starts here" + "Tap + to create your first note" |
+| Search no results | `Nothing found for "[query]"` + tappable "+ Create new note" row |
+| iPad no selection | Nodus logo only |
+
+## Delete Confirmation
+| Element | Text |
+|---------|------|
+| Title | `Delete '[Note Title]'?` |
+| Message | `This cannot be undone.` |
+| Buttons | `Cancel` / `Delete` (destructive) |
+
+## Note Creation UX (Hybrid)
+1. **`+` button**: Creates a new note immediately with timestamp-only filename, navigates to editor
+2. **Search → Create**: When search returns no results, show "Create new note" row at top of list
+
+## Editor Specification
+| Item | Detail |
+|------|--------|
+| Modes | Edit mode / Preview mode (toggle button) |
+| Immersion | Simple (navigation bar always visible) |
+| Keyboard Toolbar | `#`  `**`  `*`  `>`  `[[`  `Tab` |
+
+### Keyboard Toolbar Behavior
+| Button | Inserts | Cursor Position |
+|--------|---------|-----------------|
+| `#` | `# ` | After space |
+| `**` | `****` | Between asterisks |
+| `*` | `**` | Between asterisks |
+| `>` | `> ` | After space |
+| `[[` | `[[]]` | Between brackets |
+| `Tab` | `\t` | After tab |
+
+## Sync
+- iCloud Drive ubiquity container
+- On first launch, user selects their Zettelkasten folder via system folder picker
+- Selected folder persisted via security-scoped bookmark
+- Files.app access is a natural benefit of this approach
+- Compatible with any Markdown editor (The Archive, Zettlr, iA Writer, etc.)
+
+## iCloud Container ID (placeholder)
+```
+iCloud.com.YOURNAME.Nodus
+```
+> Replace YOURNAME with your Apple Developer Team ID before first build.
+
+## Testing Policy
+Full TDD is not adopted. Use **pinpoint testing** only.
+
+### What to test
+| Target | Reason |
+|--------|--------|
+| `SearchEngine` | AND search logic has edge cases that break silently |
+| `LinkResolver` | Partial match logic must be reliable across all notes |
+| `NoteFilenameParser` | Timestamp/title extraction affects every feature |
+
+### What NOT to test
+| Target | Reason |
+|--------|--------|
+| SwiftUI Views | Poor cost/benefit ratio |
+| iCloud file I/O | Environment-dependent, hard to mock reliably |
+| ViewModels | Cover indirectly via Core Logic tests |
+
+### When to write tests
+- Write tests for the 3 Core Logic targets above during PHASE 4
+- Add more tests only if a bug recurs (regression test)
+- Do not write tests before PHASE 4
+
+### Test style
+- Use XCTest (built into Xcode, no external libraries)
+- Test pure functions only: given input → expected output
+- One test per behavior (not one test per function)
+
+```swift
+// Good: one behavior per test
+func testANDSearchRequiresAllTerms() { ... }
+func testANDSearchIsCaseInsensitive() { ... }
+func testEmptyQueryReturnsAllNotes() { ... }
+
+// Bad: multiple behaviors in one test
+func testSearch() { ... }
+```
+
+## Development Workflow
+| Task | Tool |
+|------|------|
+| Write and edit code | Cursor |
+| AI-assisted implementation | Cursor |
+| Build and check errors | Xcode (⌘B) |
+| Run on simulator | Xcode (⌘R) |
+| Test on real device | Xcode |
+| App Store submission | Xcode |
+
+### Key Rule
+**Edit code in Cursor only.** Xcode is for build, run, and debug.
+Never edit the same file in both tools simultaneously.
+
+## Folder Structure
+```
+Nodus/
+├── App/
+│   └── NodusApp.swift
+├── Models/
+│   └── Note.swift
+├── Views/
+│   ├── ContentView.swift
+│   ├── NoteListView.swift
+│   ├── NoteDetailView.swift
+│   └── EmptySelectionView.swift
+├── ViewModels/
+│   └── NoteStore.swift
+├── Core/                          ← Pure logic (tested)
+│   ├── SearchEngine.swift
+│   ├── LinkResolver.swift
+│   └── NoteFilenameParser.swift
+└── Utilities/
+    └── DateFormatter+Note.swift
+```
+
+## Coding Conventions
+- Follow SwiftUI best practices
+- Use only iOS 17+ APIs
+- Prefer simple, readable code over clever code
+- Keep views small and composable
+- No force unwrapping (`!`) without explicit comment explaining why it's safe
+- Core/ files must be pure functions with no SwiftUI or UIKit imports

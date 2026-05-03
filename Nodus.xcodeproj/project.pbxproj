@@ -32,6 +32,7 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A3D7D1C12FA76FAC00920C6A /* Nodus */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			/* App/, Views/, Models/, ViewModels/, Core/, Utilities/, Assets.xcassets */
 			path = Nodus;
 			sourceTree = "<group>";
 		};
