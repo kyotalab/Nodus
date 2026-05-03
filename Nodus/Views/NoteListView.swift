@@ -8,18 +8,21 @@
 import SwiftUI
 
 /// ノート一覧。iPad 等では `List(selection:)` で Split の詳細と同期し、
-/// iPhone（コンパクト幅）では `NavigationLink` でスタック遷移する。
+/// iPhone（コンパクト幅）では `NavigationStack` + `NavigationPath` でプッシュ遷移する。
 struct NoteListView: View {
     /// 一覧の出し分け（`Binding` を含むため `Equatable` にはしない）
     enum Style {
         /// `NavigationSplitView` のサイドバー用。選択は `UUID?` で行い、詳細側で `Note` を引き直す。
         case splitSidebar(selection: Binding<UUID?>)
-        /// iPhone 向け。内側の `NavigationStack` でプッシュ遷移する。
+        /// iPhone 向け。`NavigationPath` で詳細へプッシュし、+ からの遷移も同じ経路に載せる。
         case compactStack
     }
 
     @EnvironmentObject private var store: NoteStore
     let style: Style
+
+    /// コンパクトレイアウト専用。新規作成後に `append(note.id)` して `NoteDetailView` へ進む。
+    @State private var compactNavigationPath = NavigationPath()
 
     var body: some View {
         switch style {
@@ -30,7 +33,7 @@ struct NoteListView: View {
         }
     }
 
-    /// iPad / ワイド: 選択型は `UUID?` にして `List` のタグと確実に一致させる。
+    /// iPad / ワイド: `List(selection:)` と詳細ペインを `UUID` で同期。
     private func splitSidebarList(selection: Binding<UUID?>) -> some View {
         NavigationStack {
             List(selection: selection) {
@@ -40,22 +43,55 @@ struct NoteListView: View {
                 }
             }
             .navigationTitle("Notes")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        addNote(splitSelection: selection)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("New note")
+                }
+            }
         }
     }
 
-    /// iPhone 等: `NavigationLink` で `NoteDetailView` へプッシュ
+    /// iPhone 等: 行タップまたは + から `UUID` を積んで `navigationDestination` で詳細へ。
     private var compactStackList: some View {
-        NavigationStack {
+        NavigationStack(path: $compactNavigationPath) {
             List {
                 ForEach(store.notes) { note in
-                    NavigationLink {
-                        NoteDetailView(note: note)
-                    } label: {
+                    NavigationLink(value: note.id) {
                         Text(note.displayName)
                     }
                 }
             }
             .navigationTitle("Notes")
+            .navigationDestination(for: UUID.self) { id in
+                if let note = store.notes.first(where: { $0.id == id }) {
+                    NoteDetailView(note: note)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        addNote(splitSelection: nil)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("New note")
+                }
+            }
+        }
+    }
+
+    /// `createNote()` 後、Split なら `selectedNoteID` を更新、コンパクトならナビゲーションパスに積む。
+    private func addNote(splitSelection: Binding<UUID?>?) {
+        let note = store.createNote()
+        if let selection = splitSelection {
+            selection.wrappedValue = note.id
+        } else {
+            compactNavigationPath.append(note.id)
         }
     }
 }
