@@ -2,7 +2,7 @@
 //  NoteStore.swift
 //  Nodus
 //
-//  PHASE 3 STEP 4: iCloud Drive 上の .md ファイルを一覧・作成・保存・削除する
+//  PHASE 3 STEP 4–5: iCloud Drive 上の .md の CRUD と、NSMetadataQuery による外部変更検知
 //
 
 import Combine
@@ -17,13 +17,37 @@ final class NoteStore: ObservableObject {
     /// security-scoped bookmark へのアクセス窓口。
     private var folderBookmark: FolderBookmark?
 
+    // MARK: - iCloud メタデータ監視（外部エディタの変更検知）
+
+    /// 選択フォルダ配下の `.md` のメタデータ変化を追うクエリ。メインスレッドで操作する。
+    private var metadataQuery: NSMetadataQuery?
+
+    /// メタデータ通知のオブザーバをまとめて解除するため保持する。
+    private var metadataQueryObservers: [NSObjectProtocol] = []
+
+    /// 監視中に security-scoped アクセスを維持するためのフォルダ URL。
+    private var monitoringScopedFolderURL: URL?
+
+    /// `startAccessingSecurityScopedResource` が成功したか（対になる stop が必要）。
+    private var didStartSecurityScopedAccessForMonitoring = false
+
+    /// 通知が短時間に連続するのをまとめるデバウンス用ワークアイテム。
+    private var metadataReloadDebounceWorkItem: DispatchWorkItem?
+
+    /// メタデータ更新後の `loadNotes()` までの待ち時間（秒）。
+    private let metadataReloadDebounceInterval: TimeInterval = 0.5
+
     init() {}
 
     /// `NodusApp` 側で `FolderBookmark` を注入する。URL が既にある場合は即ロードする。
     func configure(folderBookmark: FolderBookmark) {
+        // フォルダが変わるたびに古い監視を止め、新しい bookmark に合わせる。
+        stopMonitoring()
         self.folderBookmark = folderBookmark
         if folderBookmark.hasSelectedFolder {
             loadNotes()
+            // 既に foreground のときは scenePhase の onChange が来ないことがあるため、フォルダ確定直後も監視を開始する。
+            startMonitoring()
         } else {
             notes = []
         }
@@ -167,5 +191,90 @@ final class NoteStore: ObservableObject {
             print("❌ NoteStore.loadBody failed: \(error.localizedDescription)")
             return ""
         }
+    }
+
+    // MARK: - メタデータ監視（STEP 5）
+
+    /// `NSMetadataQuery` を開始し、選択フォルダ配下の `.md` の変化を監視する（メインスレッド専用）。
+    func startMonitoring() {
+        guard let folderBookmark, folderBookmark.hasSelectedFolder, let folderURL = folderBookmark.selectedFolderURL else {
+            stopMonitoring()
+            return
+        }
+
+        // 既に同じフォルダで動いていれば何もしない（二重開始を防ぐ）。
+        if let query = metadataQuery, query.isStarted, monitoringScopedFolderURL == folderURL {
+            return
+        }
+
+        stopMonitoring()
+
+        // メタデータクエリは対象ディレクトリへの継続アクセスが必要なことがあるため、監視中だけ scope を張る。
+        didStartSecurityScopedAccessForMonitoring = folderURL.startAccessingSecurityScopedResource()
+        monitoringScopedFolderURL = folderURL
+
+        let query = NSMetadataQuery()
+        // ユーザーが選んだフォルダ（とそのサブフォルダ）だけを検索範囲にする。
+        query.searchScopes = [folderURL as NSURL]
+        // ファイル名が `.md` で終わるものに限定する。
+        query.predicate = NSPredicate(format: "%K ENDSWITH[c] '.md'", NSMetadataItemFSNameKey)
+
+        let center = NotificationCenter.default
+        let queue = OperationQueue.main
+
+        // 初回の結果収集が終わったタイミングでも一覧を同期する。
+        let finishObserver = center.addObserver(
+            forName: .NSMetadataQueryDidFinishGathering,
+            object: query,
+            queue: queue
+        ) { [weak self] _ in
+            self?.handleMetadataUpdate()
+        }
+        metadataQueryObservers.append(finishObserver)
+
+        // 以降の iCloud 側の更新（外部アプリによる変更など）を拾う。
+        let updateObserver = center.addObserver(
+            forName: .NSMetadataQueryDidUpdate,
+            object: query,
+            queue: queue
+        ) { [weak self] _ in
+            self?.handleMetadataUpdate()
+        }
+        metadataQueryObservers.append(updateObserver)
+
+        metadataQuery = query
+        query.start()
+    }
+
+    /// メタデータ監視を停止し、リソースアクセスも解放する。
+    func stopMonitoring() {
+        metadataReloadDebounceWorkItem?.cancel()
+        metadataReloadDebounceWorkItem = nil
+
+        if let query = metadataQuery {
+            for observer in metadataQueryObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            metadataQueryObservers.removeAll()
+            query.stop()
+        }
+        metadataQuery = nil
+
+        if didStartSecurityScopedAccessForMonitoring, let url = monitoringScopedFolderURL {
+            url.stopAccessingSecurityScopedResource()
+        }
+        didStartSecurityScopedAccessForMonitoring = false
+        monitoringScopedFolderURL = nil
+    }
+
+    /// メタデータの変化を受け取り、デバウンスしたうえで一覧を再読込する。
+    /// STEP 5 では編集モード保留は行わず、常に `loadNotes()` で同期する（編集時の保留は PHASE 4）。
+    func handleMetadataUpdate() {
+        metadataReloadDebounceWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.loadNotes()
+        }
+        metadataReloadDebounceWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + metadataReloadDebounceInterval, execute: work)
     }
 }

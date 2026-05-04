@@ -16,27 +16,7 @@ struct NodusApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                // bookmark が未設定なら初回フォルダ選択 UI を表示する。
-                if folderBookmark.hasSelectedFolder {
-                    ContentView()
-                        .environmentObject(noteStore)
-                        .environmentObject(folderBookmark)
-                } else {
-                    FolderPickerView(folderBookmark: folderBookmark) {
-                        // フォルダ選択直後にノート一覧を読み込む。
-                        noteStore.loadNotes()
-                    }
-                }
-            }
-            .onAppear {
-                // 起動時に FolderBookmark を NoteStore へ渡して連携を開始する。
-                noteStore.configure(folderBookmark: folderBookmark)
-            }
-            .onChange(of: folderBookmark.selectedFolderURL) { _, _ in
-                // フォルダ変更時（初回選択含む）は毎回再読込する。
-                noteStore.configure(folderBookmark: folderBookmark)
-            }
+            NodusRootView(noteStore: noteStore, folderBookmark: folderBookmark)
         }
     }
 }
