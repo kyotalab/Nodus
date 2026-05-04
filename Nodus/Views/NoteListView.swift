@@ -12,8 +12,8 @@ import SwiftUI
 struct NoteListView: View {
     /// 一覧の出し分け（`Binding` を含むため `Equatable` にはしない）
     enum Style {
-        /// `NavigationSplitView` のサイドバー用。選択は `UUID?` で行い、詳細側で `Note` を引き直す。
-        case splitSidebar(selection: Binding<UUID?>)
+        /// `NavigationSplitView` のサイドバー用。選択は `timestampID`（`String`）で行う。
+        case splitSidebar(selection: Binding<String?>)
         /// iPhone 向け。`NavigationPath` で詳細へプッシュし、+ からの遷移も同じ経路に載せる。
         case compactStack
     }
@@ -21,7 +21,7 @@ struct NoteListView: View {
     @EnvironmentObject private var store: NoteStore
     let style: Style
 
-    /// コンパクトレイアウト専用。新規作成後に `append(note.id)` して `NoteDetailView` へ進む。
+    /// コンパクトレイアウト専用。新規作成後に `append(note.id)`（String）して詳細へ進む。
     @State private var compactNavigationPath = NavigationPath()
 
     var body: some View {
@@ -33,8 +33,8 @@ struct NoteListView: View {
         }
     }
 
-    /// iPad / ワイド: `List(selection:)` と詳細ペインを `UUID` で同期。
-    private func splitSidebarList(selection: Binding<UUID?>) -> some View {
+    /// iPad / ワイド: `List(selection:)` と詳細ペインを `timestampID` で同期。
+    private func splitSidebarList(selection: Binding<String?>) -> some View {
         NavigationStack {
             List(selection: selection) {
                 ForEach(store.notes) { note in
@@ -56,7 +56,7 @@ struct NoteListView: View {
         }
     }
 
-    /// iPhone 等: 行タップまたは + から `UUID` を積んで `navigationDestination` で詳細へ。
+    /// iPhone 等: 行タップまたは + から `String` ID を積んで `navigationDestination` で詳細へ。
     private var compactStackList: some View {
         NavigationStack(path: $compactNavigationPath) {
             List {
@@ -67,7 +67,7 @@ struct NoteListView: View {
                 }
             }
             .navigationTitle("Notes")
-            .navigationDestination(for: UUID.self) { id in
+            .navigationDestination(for: String.self) { id in
                 if let note = store.notes.first(where: { $0.id == id }) {
                     NoteDetailView(note: note)
                 }
@@ -86,7 +86,7 @@ struct NoteListView: View {
     }
 
     /// `createNote()` 後、Split なら `selectedNoteID` を更新、コンパクトならナビゲーションパスに積む。
-    private func addNote(splitSelection: Binding<UUID?>?) {
+    private func addNote(splitSelection: Binding<String?>?) {
         let note = store.createNote()
         if let selection = splitSelection {
             selection.wrappedValue = note.id

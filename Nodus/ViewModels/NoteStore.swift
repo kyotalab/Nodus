@@ -2,7 +2,7 @@
 //  NoteStore.swift
 //  Nodus
 //
-//  PHASE 2: メモリ上のノート一覧と CRUD の入口（ダミーデータ）
+//  PHASE 3: ノート一覧の状態管理。STEP 3時点では仮URL使用、STEP 4でiCloud Drive対応予定。
 //
 
 import Combine
@@ -29,8 +29,8 @@ final class NoteStore: ObservableObject {
         let stamp = Self.filenameTimestamp(from: now)
         let filename = "\(stamp).md"
         let note = Note(
-            id: UUID(),
-            filename: filename,
+            // PHASE 3 STEP 3 時点では、実ファイル I/O 未実装のため仮 URL を使う。
+            url: Self.dummyFileURL(filename: filename),
             body: "",
             createdAt: now,
             updatedAt: now
@@ -50,8 +50,7 @@ final class NoteStore: ObservableObject {
     private static func makeDummyNotes() -> [Note] {
         [
             Note(
-                id: UUID(),
-                filename: "202402101430.md",
+                url: dummyFileURL(filename: "202402101430.md"),
                 body: """
                 # Scratch note
 
@@ -61,8 +60,7 @@ final class NoteStore: ObservableObject {
                 updatedAt: dateFromFilenamePrefix("202402101430")
             ),
             Note(
-                id: UUID(),
-                filename: "202403220915 SwiftUI and Compose.md",
+                url: dummyFileURL(filename: "202403220915 SwiftUI and Compose.md"),
                 body: """
                 ## Comparison
 
@@ -77,8 +75,7 @@ final class NoteStore: ObservableObject {
                 updatedAt: dateFromFilenamePrefix("202404011200")
             ),
             Note(
-                id: UUID(),
-                filename: "202406011200.md",
+                url: dummyFileURL(filename: "202406011200.md"),
                 body: """
                 Short note mixing *italic*, inline `code`, and `[[202501051030]]` for link resolution tests.
                 """,
@@ -86,8 +83,7 @@ final class NoteStore: ObservableObject {
                 updatedAt: dateFromFilenamePrefix("202406011200")
             ),
             Note(
-                id: UUID(),
-                filename: "202409301845 Links and graph.md",
+                url: dummyFileURL(filename: "202409301845 Links and graph.md"),
                 body: """
                 # Linking notes
 
@@ -99,15 +95,14 @@ final class NoteStore: ObservableObject {
                 updatedAt: dateFromFilenamePrefix("202410051030")
             ),
             Note(
-                id: UUID(),
-                filename: "202501051030 Daily log.md",
+                url: dummyFileURL(filename: "202501051030 Daily log.md"),
                 body: """
                 - Groceries
                 - Read for *30 minutes*
 
                 ```swift
                 struct Note: Identifiable {
-                    let id: UUID
+                    let id: String
                 }
                 ```
 
@@ -117,8 +112,7 @@ final class NoteStore: ObservableObject {
                 updatedAt: dateFromFilenamePrefix("202501051030")
             ),
             Note(
-                id: UUID(),
-                filename: "202503151845.md",
+                url: dummyFileURL(filename: "202503151845.md"),
                 body: """
                 Timestamp-only filename (`202503151845.md`). Body can still use **Markdown** and `[[202409301845]]` to exercise previews and link styling.
                 """,
@@ -137,5 +131,10 @@ final class NoteStore: ObservableObject {
     /// 任意の日時を、ノートファイル名用の 12 桁タイムスタンプ文字列にする。
     private static func filenameTimestamp(from date: Date) -> String {
         DateFormatter.noteTimestamp.string(from: date)
+    }
+
+    /// PHASE 3 STEP 3 用: 実ファイル I/O 前のため、`/tmp` 配下の仮 URL を返す。
+    private static func dummyFileURL(filename: String) -> URL {
+        URL(fileURLWithPath: "/tmp").appendingPathComponent(filename)
     }
 }

@@ -7,14 +7,11 @@
 
 import Foundation
 
-/// 1件のノートを表すモデル。リスト表示や詳細画面の識別に `Identifiable` を使う。
+/// 1件のノートを表すモデル。PHASE 3 では実ファイル URL を識別の基準にする。
 /// `List(selection:)` など分割ビューとの連携のため `Hashable` に準拠する。
 struct Note: Identifiable, Hashable {
-    /// SwiftUI の `List` などで行を一意に識別するための ID（ファイルとは別の安定キー）
-    let id: UUID
-
-    /// ディスク上のファイル名（例: `202604271321 Title.md`）
-    var filename: String
+    /// ファイル実体の URL。将来の iCloud Drive ファイル I/O の基準になる。
+    let url: URL
 
     /// Markdown 形式の本文
     var body: String
@@ -24,6 +21,16 @@ struct Note: Identifiable, Hashable {
 
     /// 最終更新日時
     var updatedAt: Date
+
+    /// `Identifiable` 用 ID。仕様どおりファイル名先頭 12 桁のタイムスタンプ ID を使う。
+    var id: String {
+        timestampID
+    }
+
+    /// ディスク上のファイル名（例: `202604271321 Title.md`）
+    var filename: String {
+        url.lastPathComponent
+    }
 
     /// ファイル名の先頭 12 文字（Wiki リンク `[[ID]]` の ID 部分に相当するタイムスタンプ）
     /// 仕様上は `YYYYMMDDHHmm` の 12 桁を想定するが、ここでは文字列として先頭 12 文字を返すだけに留める。

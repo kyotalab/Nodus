@@ -13,8 +13,8 @@ struct ContentView: View {
     /// 横並びの列が「レギュラー」かどうか（iPhone 縦は通常 `.compact`）
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// iPad の Split では `Note` 丸ごとの `List(selection:)` がタグ一致に失敗することがあるため、`UUID` で選ぶ。
-    @State private var selectedNoteID: UUID?
+    /// iPad の Split では `Note` 丸ごとの `List(selection:)` がタグ一致に失敗することがあるため、ID 文字列で選ぶ。
+    @State private var selectedNoteID: String?
 
     var body: some View {
         Group {
