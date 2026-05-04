@@ -131,21 +131,11 @@ final class NoteStore: ObservableObject {
     /// ファイル名の先頭 12 桁 `yyyyMMddHHmm` を `Date` に変換する（失敗時は現在時刻）。
     private static func dateFromFilenamePrefix(_ prefix12: String) -> Date {
         let key = String(prefix12.prefix(12))
-        return stampFormatter.date(from: key) ?? Date()
+        return DateFormatter.noteTimestamp.date(from: key) ?? Date()
     }
 
     /// 任意の日時を、ノートファイル名用の 12 桁タイムスタンプ文字列にする。
     private static func filenameTimestamp(from date: Date) -> String {
-        stampFormatter.string(from: date)
+        DateFormatter.noteTimestamp.string(from: date)
     }
-
-    /// パースと生成の両方に使う（ロケール固定で文字列がブレないようにする）。
-    private static let stampFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "Asia/Tokyo")
-        formatter.dateFormat = "yyyyMMddHHmm"
-        return formatter
-    }()
 }
