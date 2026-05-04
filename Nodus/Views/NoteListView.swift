@@ -87,7 +87,7 @@ struct NoteListView: View {
 
     /// `createNote()` 後、Split なら `selectedNoteID` を更新、コンパクトならナビゲーションパスに積む。
     private func addNote(splitSelection: Binding<String?>?) {
-        let note = store.createNote()
+        guard let note = store.createNote() else { return }
         if let selection = splitSelection {
             selection.wrappedValue = note.id
         } else {
