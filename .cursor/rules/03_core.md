@@ -37,6 +37,8 @@ func search(query: String, in notes: [Note]) -> [Note] {
 - Results update in real time as user types
 - Empty query → show all notes
 - No results + query not empty → show `Nothing found for "[query]"` message + tappable "+ Create new note" row
+- Sort button remains active during search — applies to search results
+- ✕ clears query, dismisses keyboard focus, returns to full list
 
 ---
 
@@ -69,9 +71,18 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 }
 ```
 
-### Rendering in Preview Mode
-In preview mode, detect `[[...]]` patterns and render as tappable links.
-Use `NSRegularExpression` or Swift `Regex` (iOS 16+) to find patterns.
+### Rendering by Mode
+
+**Edit Mode:**
+- `[[202604271321]]` is displayed as plain text only
+- No tap interaction
+- User is writing — accidental navigation must be avoided
+
+**Preview Mode:**
+- Detect `[[...]]` patterns and render as tappable links
+- Use `NSRegularExpression` or Swift `Regex` (iOS 16+) to find patterns
+- Resolved links: system blue, tappable → navigate to note
+- Broken links: system gray, not tappable
 
 ```swift
 // Pattern to match [[anything]]
@@ -159,13 +170,15 @@ var keyboardToolbar: some View {
 ### Available Sort Orders
 ```swift
 enum SortOrder: String, CaseIterable {
-    case updatedDesc  = "Updated (newest)"
+    case updatedDesc  = "Updated (newest)"  // Default
     case createdDesc  = "Created (newest)"
     case titleAsc     = "Title (A-Z)"
     case backlinkDesc = "Most linked"
     case random       = "Random"
 }
 ```
+> Sort preference persisted via `@AppStorage`
+> Sort applies to search results as well as full list
 
 ### Random Sort
 ```swift

@@ -38,7 +38,10 @@ This loop is the core experience. Every design decision should support it.
 |------|--------|
 | Syntax | `[[ID]]` e.g. `[[202604271321]]` |
 | Resolution | Partial match against filename |
-| Rationale | Links survive title renames |
+| Edit Mode | Plain text only — no tap interaction |
+| Preview Mode (resolved) | System blue, tappable → navigate to note |
+| Preview Mode (broken) | System gray, not tappable |
+| Back Navigation | NavigationStack — `< Back` supports multiple jump levels |
 
 ### Link Resolution Logic
 ```swift
@@ -53,6 +56,12 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 |------|--------|
 | Scope | Filename + full body text |
 | Method | Space-separated AND search |
+| Case Sensitivity | Case insensitive |
+| Real-time | Results update as user types |
+| Result Order | Current sort order applied as-is |
+| Clear Behavior | ✕ clears query, dismisses focus, returns to full list |
+| Sort During Search | Sort button remains active |
+| Tag Search | No special handling — `#draft` matches as plain text |
 | Example | `swift note` → files containing both "swift" AND "note" |
 
 ## UI Structure
@@ -81,6 +90,28 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 | Message | `This cannot be undone.` |
 | Buttons | `Cancel` / `Delete` (destructive) |
 
+## Settings Screen
+```
+Settings
+├── Storage
+│   └── Zettelkasten Folder     ← change selected folder
+├── Editor
+│   └── Default Mode            ← Edit / Preview (default: Edit)
+└── About
+    ├── Version
+    └── Support
+```
+
+## Markdown Rendering (Preview Mode)
+| Element | Rendered |
+|---------|---------|
+| Headings, Bold, Italic, Blockquote | ✅ |
+| Inline code, Code block | ✅ |
+| Lists (ordered/unordered), Horizontal rule | ✅ |
+| Strikethrough, Table, Footnotes | ✅ |
+| `[[wiki links]]` | ✅ System blue/gray |
+| Images (`![alt](url)`) | ❌ Alt text only |
+
 ## Note Creation UX (Hybrid)
 1. **`+` button**: Creates a new note immediately with timestamp-only filename, navigates to editor
 2. **Search → Create**: When search returns no results, show "Create new note" row at top of list
@@ -89,8 +120,10 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 | Item | Detail |
 |------|--------|
 | Modes | Edit mode / Preview mode (toggle button) |
+| Default Mode | Configurable in Settings (Edit or Preview, default: Edit) |
 | Immersion | Simple (navigation bar always visible) |
 | Keyboard Toolbar | `#`  `**`  `*`  `>`  `[[`  `Tab` |
+| Title Editing | Tap title area to begin editing — commits on Return or focus lost |
 
 ### Keyboard Toolbar Behavior
 | Button | Inserts | Cursor Position |
@@ -108,6 +141,12 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 - Selected folder persisted via security-scoped bookmark
 - Files.app access is a natural benefit of this approach
 - Compatible with any Markdown editor (The Archive, Zettlr, iA Writer, etc.)
+
+### External Change Behavior
+| State | Behavior |
+|-------|---------|
+| Preview mode | Auto-update to latest content immediately |
+| Edit mode (keyboard visible) | Hold external changes — apply when user leaves edit mode |
 
 ## iCloud Container ID (placeholder)
 ```
@@ -188,6 +227,10 @@ Nodus/
     └── DateFormatter+Note.swift
 ```
 
+## UI Language
+- All UI text must be in English (button labels, navigation titles, alerts, empty states)
+- Note content written by the user may be in any language
+
 ## Coding Conventions
 - Follow SwiftUI best practices
 - Use only iOS 17+ APIs
@@ -195,11 +238,3 @@ Nodus/
 - Keep views small and composable
 - No force unwrapping (`!`) without explicit comment explaining why it's safe
 - Core/ files must be pure functions with no SwiftUI or UIKit imports
-
-### UI Language
-- All UI text (navigation titles, button labels, empty states, alerts) must be in English
-- Note content written by the user may be in any language
-- Examples:
-  - ✅ "Notes" not "ノート"
-  - ✅ "Delete" not "削除"
-  - ✅ "Nothing found for..." not "見つかりません"

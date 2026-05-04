@@ -152,8 +152,15 @@ query.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
 query.predicate = NSPredicate(format: "%K LIKE '*.md'", NSMetadataItemFSNameKey)
 // Observe NSMetadataQueryDidUpdateNotification
 ```
+
+### External Change Behavior
+When a file changes externally while the note is open in Nodus:
+- **Preview mode**: apply new content immediately
+- **Edit mode** (keyboard visible): store as `pendingExternalUpdate`, apply when user exits edit mode
+- This prevents in-progress edits from being overwritten
+
 > ⚠️ This is the most complex part of Phase 3.
-> Implement it after basic read/write is working.
+> Implement basic read/write first, then add NSMetadataQuery, then add external change behavior.
 
 ## Phase 3 Checklist
 - [ ] iCloud capability added in Xcode

@@ -15,6 +15,18 @@ Focus on reliability, edge cases, and the details that make daily use pleasant.
 2. App goes to background (`scenePhase == .background`)
 3. 2-second debounce after last keystroke
 
+### External Change Behavior
+```swift
+// When NSMetadataQuery detects external file change:
+if isEditing {
+    // Hold — apply after user leaves edit mode
+    pendingExternalUpdate = newContent
+} else {
+    // Preview mode or not open — apply immediately
+    note.body = newContent
+}
+```
+
 ### Debounce Implementation
 ```swift
 // In NoteDetailView or its ViewModel
@@ -85,7 +97,7 @@ Buttons: [Cancel] [Delete]               ← Delete is destructive (red)
 
 ## Area 4: Empty States
 
-### No Notes at All (first launch)
+### No Notes at All (first launch — also shown after folder selection if folder is empty)
 ```
 ┌─────────────────────────┐
 │                         │
@@ -154,6 +166,22 @@ struct Note {
 - Support Dynamic Type (avoid fixed font sizes)
 
 ---
+
+## Area 6.5: Settings Screen
+
+Implement a minimal Settings screen accessible from the note list toolbar:
+
+```swift
+// Settings items:
+// 1. Storage → Zettelkasten Folder (UIDocumentPickerViewController)
+// 2. Editor → Default Mode (Edit / Preview) — stored in @AppStorage
+// 3. About → Version + Support URL
+```
+
+```swift
+// Default mode persistence
+@AppStorage("defaultEditorMode") var defaultEditorMode: String = "edit"
+```
 
 ## Area 7: iPad-Specific Polish
 
