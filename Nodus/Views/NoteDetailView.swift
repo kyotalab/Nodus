@@ -7,20 +7,49 @@
 
 import SwiftUI
 
-/// 1件のノートの詳細。PHASE 3 STEP 4 では本文を遅延ロードして表示する。
+/// 1件のノートの詳細。PHASE 4 では編集/プレビュー切替と自動保存を担う。
 struct NoteDetailView: View {
     @EnvironmentObject private var store: NoteStore
     let note: Note
+    /// 編集中の本文。初期表示時にノート本文またはファイルから読み込んでセットする。
     @State private var loadedBody = ""
+    /// 編集モード/プレビューモードの切替状態。現時点では編集モード固定開始。
+    @State private var isEditing: Bool = true
+    /// 本文変更時の自動保存を 2 秒遅延させるためのワークアイテム。
+    @State private var autosaveWorkItem: DispatchWorkItem?
 
     var body: some View {
-        ScrollView {
-            Text(loadedBody)
-                .font(.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+        Group {
+            if isEditing {
+                // 編集モード: TextEditor でプレーンテキストを編集する。
+                TextEditor(text: $loadedBody)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .onChange(of: loadedBody) { _, _ in
+                        scheduleAutosave()
+                    }
+            } else {
+                // プレビューモード: Markdown を AttributedString で描画する。
+                ScrollView {
+                    Text(markdownPreviewText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+            }
         }
         .navigationTitle(note.displayName)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                // 右上ボタンで Edit / Preview を切り替える。
+                Button(isEditing ? "Preview" : "Edit") {
+                    if isEditing {
+                        // 編集からプレビューへ移るときは未保存内容を即時保存する。
+                        saveImmediately()
+                    }
+                    isEditing.toggle()
+                }
+            }
+        }
         .task(id: note.url) {
             // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
             if !note.body.isEmpty {
@@ -30,5 +59,42 @@ struct NoteDetailView: View {
                 loadedBody = store.loadBody(for: note)
             }
         }
+        .onDisappear {
+            // 画面離脱時に保留中の保存タスクを破棄し、内容は即時保存する。
+            autosaveWorkItem?.cancel()
+            saveImmediately()
+        }
+    }
+
+    /// 現在の本文を反映した保存用 Note を作る。
+    private var noteForSave: Note {
+        var editable = note
+        editable.body = loadedBody
+        return editable
+    }
+
+    /// 2 秒デバウンスで自動保存を予約する。
+    private func scheduleAutosave() {
+        autosaveWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            saveImmediately()
+        }
+        autosaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: workItem)
+    }
+
+    /// 直ちに保存し、保留中の保存タスクをクリアする。
+    private func saveImmediately() {
+        autosaveWorkItem?.cancel()
+        autosaveWorkItem = nil
+        store.saveNote(noteForSave)
+    }
+
+    /// Markdown を描画用文字列へ変換する（失敗時は生テキスト表示）。
+    private var markdownPreviewText: AttributedString {
+        if let attributed = try? AttributedString(markdown: loadedBody) {
+            return attributed
+        }
+        return AttributedString(loadedBody)
     }
 }
