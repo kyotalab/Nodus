@@ -17,6 +17,8 @@ struct NoteDetailView: View {
     @State private var isEditing: Bool = true
     /// 本文変更時の自動保存を 2 秒遅延させるためのワークアイテム。
     @State private var autosaveWorkItem: DispatchWorkItem?
+    /// キーボードツールバー表示のため、TextEditor のフォーカス状態を保持する。
+    @FocusState private var isEditorFocused: Bool
 
     var body: some View {
         Group {
@@ -25,6 +27,7 @@ struct NoteDetailView: View {
                 TextEditor(text: $loadedBody)
                     .font(.system(.body, design: .monospaced))
                     .padding(.horizontal, 8)
+                    .focused($isEditorFocused)
                     .onChange(of: loadedBody) { _, _ in
                         scheduleAutosave()
                     }
@@ -49,6 +52,18 @@ struct NoteDetailView: View {
                     isEditing.toggle()
                 }
             }
+            if isEditing {
+                ToolbarItemGroup(placement: .keyboard) {
+                    // 案A: カーソル厳密制御は行わず、入力テキストを末尾に追加する。
+                    Button("#") { appendToEditor("# ") }
+                    Button("**") { appendToEditor("****") }
+                    Button("*") { appendToEditor("**") }
+                    Button(">") { appendToEditor("> ") }
+                    Button("[[") { appendToEditor("[[]]") }
+                    Button("⇥") { appendToEditor("\t") }
+                    Spacer()
+                }
+            }
         }
         .task(id: note.url) {
             // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
@@ -63,6 +78,10 @@ struct NoteDetailView: View {
             // 画面離脱時に保留中の保存タスクを破棄し、内容は即時保存する。
             autosaveWorkItem?.cancel()
             saveImmediately()
+        }
+        .onChange(of: isEditing) { _, newValue in
+            // モード切替後の入力体験を安定させるため、編集モードに戻ったらフォーカスを戻す。
+            isEditorFocused = newValue
         }
     }
 
@@ -88,6 +107,12 @@ struct NoteDetailView: View {
         autosaveWorkItem?.cancel()
         autosaveWorkItem = nil
         store.saveNote(noteForSave)
+    }
+
+    /// キーボードツールバーの入力を本文末尾へ追加する（案A）。
+    private func appendToEditor(_ text: String) {
+        loadedBody += text
+        isEditorFocused = true
     }
 
     /// Markdown を描画用文字列へ変換する（失敗時は生テキスト表示）。
