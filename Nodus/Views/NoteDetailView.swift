@@ -19,6 +19,8 @@ struct NoteDetailView: View {
     @State private var autosaveWorkItem: DispatchWorkItem?
     /// キーボードツールバー表示のため、TextEditor のフォーカス状態を保持する。
     @FocusState private var isEditorFocused: Bool
+    /// プレビュー内の wiki リンクタップで遷移するための宛先ノート。
+    @State private var linkedNoteForNavigation: Note?
 
     var body: some View {
         Group {
@@ -41,6 +43,10 @@ struct NoteDetailView: View {
             }
         }
         .navigationTitle(note.displayName)
+        .navigationDestination(item: $linkedNoteForNavigation) { linkedNote in
+            // wiki リンクタップ時は同じ詳細画面をさらに積んで遷移する。
+            NoteDetailView(note: linkedNote)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 // 右上ボタンで Edit / Preview を切り替える。
@@ -79,6 +85,20 @@ struct NoteDetailView: View {
             autosaveWorkItem?.cancel()
             saveImmediately()
         }
+        .environment(\.openURL, OpenURLAction { url in
+            // プレビュー内リンクのタップを捕捉し、`nodus://` だけ独自遷移に変換する。
+            guard url.scheme == "nodus" else { return .systemAction }
+            let id = url.host ?? url.lastPathComponent
+            guard !id.isEmpty else { return .discarded }
+
+            if let resolved = LinkResolver.resolve(id, in: store.notes) {
+                linkedNoteForNavigation = resolved
+                return .handled
+            } else {
+                // 解決できない ID は遷移させない。
+                return .discarded
+            }
+        })
         .onChange(of: isEditing) { _, newValue in
             // モード切替後の入力体験を安定させるため、編集モードに戻ったらフォーカスを戻す。
             isEditorFocused = newValue
@@ -117,9 +137,61 @@ struct NoteDetailView: View {
 
     /// Markdown を描画用文字列へ変換する（失敗時は生テキスト表示）。
     private var markdownPreviewText: AttributedString {
-        if let attributed = try? AttributedString(markdown: loadedBody) {
-            return attributed
+        // STEP 1: 解決済み `[[ID]]` を一時的な markdown リンクへ変換する。
+        let transformed = replacingResolvedWikiLinksWithMarkdownLinks(in: loadedBody)
+
+        // STEP 2: markdown としてレンダリングする。
+        var attributed = (try? AttributedString(markdown: transformed)) ?? AttributedString(transformed)
+
+        // 未解決 `[[ID]]` はグレーで表示し、解決済みリンクとの差を明示する。
+        applyUnresolvedWikiLinkStyle(to: &attributed)
+        return attributed
+    }
+
+    /// `[[ID]]` を走査し、解決済みのみ `[ID](nodus://ID)` へ置換する。
+    private func replacingResolvedWikiLinksWithMarkdownLinks(in body: String) -> String {
+        let pattern = /\[\[(.+?)\]\]/
+        var result = ""
+        var cursor = body.startIndex
+
+        for match in body.matches(of: pattern) {
+            let range = match.range
+            let id = String(match.1)
+
+            // マッチ開始までの通常テキストを先に連結する。
+            result += String(body[cursor..<range.lowerBound])
+
+            if LinkResolver.resolve(id, in: store.notes) != nil {
+                // 解決できる ID だけをタップ可能リンクへ変換する。
+                result += "[\(id)](nodus://\(id))"
+            } else {
+                // 未解決 ID は元の `[[...]]` を残す（後でグレー着色）。
+                result += String(match.0)
+            }
+
+            cursor = range.upperBound
         }
-        return AttributedString(loadedBody)
+
+        // 末尾に残った通常テキストを追加する。
+        result += String(body[cursor...])
+        return result
+    }
+
+    /// 未解決 wiki リンク表記 `[[...]]` の文字色をシステムグレーにする。
+    private func applyUnresolvedWikiLinkStyle(to attributed: inout AttributedString) {
+        let source = String(attributed.characters)
+        let pattern = /\[\[(.+?)\]\]/
+
+        for match in source.matches(of: pattern) {
+            let id = String(match.1)
+            guard LinkResolver.resolve(id, in: store.notes) == nil else { continue }
+
+            guard
+                let lower = AttributedString.Index(match.range.lowerBound, within: attributed),
+                let upper = AttributedString.Index(match.range.upperBound, within: attributed)
+            else { continue }
+
+            attributed[lower..<upper].foregroundColor = .gray
+        }
     }
 }
