@@ -22,7 +22,8 @@ This loop is the core experience. Every design decision should support it.
 | Item | Detail |
 |------|--------|
 | Format | Markdown plain text |
-| Extension | `.md` |
+| Extension | `.md` (primary) / `.txt` (read support only — for The Archive compatibility) |
+| New Note Extension | Always `.md` |
 | Naming | `YYYYMMDDHHmm タイトル.md` |
 | Note ID | 12-digit timestamp (e.g. `202604271321`) |
 | Storage | iCloud Drive (user-visible folder) |

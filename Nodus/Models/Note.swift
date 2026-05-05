@@ -2,7 +2,7 @@
 //  Note.swift
 //  Nodus
 //
-//  PHASE 2: ダミーデータ用のノートモデル（ファイル I/O なし）
+//  PHASE 3-4: URLベースのノートモデル。NoteFilenameParserに解析を委譲する。
 //
 
 import Foundation
@@ -35,27 +35,17 @@ struct Note: Identifiable, Hashable {
     /// ファイル名の先頭 12 文字（Wiki リンク `[[ID]]` の ID 部分に相当するタイムスタンプ）
     /// 仕様上は `YYYYMMDDHHmm` の 12 桁を想定するが、ここでは文字列として先頭 12 文字を返すだけに留める。
     var timestampID: String {
-        String(filename.prefix(12))
+        NoteFilenameParser.timestampID(from: filename)
     }
 
     /// 拡張子を除いたファイル名をそのまま返す（一覧表示は The Archive と同様にこの文字列を使う）。
     var displayName: String {
-        Self.stemByRemovingMarkdownExtension(from: filename)
+        NoteFilenameParser.displayName(from: filename)
     }
 
     /// 拡張子 `.md` を除いたファイル名から、先頭 12 文字（タイムスタンプ）より後ろをタイトルとみなす。
     /// 区切りの空白は除去する。タイムスタンプのみ（例: `202604271321.md`）のときは空文字。
     var title: String {
-        let stem = Self.stemByRemovingMarkdownExtension(from: filename)
-        guard stem.count >= 12 else { return "" }
-        let afterTimestamp = stem.dropFirst(12)
-        return String(afterTimestamp).trimmingCharacters(in: .whitespaces)
-    }
-
-    /// タイトル抽出のため、`.md` 拡張子だけを取り除いた文字列を得る（`.MD` なども同様に扱う）。
-    private static func stemByRemovingMarkdownExtension(from filename: String) -> String {
-        let lower = filename.lowercased()
-        guard lower.hasSuffix(".md"), filename.count >= 4 else { return filename }
-        return String(filename.dropLast(3))
+        NoteFilenameParser.title(from: filename)
     }
 }

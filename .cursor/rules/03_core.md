@@ -233,9 +233,24 @@ import XCTest
 final class SearchEngineTests: XCTestCase {
 
     let notes = [
-        Note(filename: "202604271321 Swift basics.md",   body: "SwiftUI tutorial"),
-        Note(filename: "202604271322 Python notes.md",   body: "Python tutorial"),
-        Note(filename: "202604271323 Swift advanced.md", body: "Protocols and generics"),
+        Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321 Swift basics.md"),
+            body: "SwiftUI tutorial",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
+        Note(
+            url: URL(fileURLWithPath: "/tmp/202604271322 Python notes.md"),
+            body: "Python tutorial",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
+        Note(
+            url: URL(fileURLWithPath: "/tmp/202604271323 Swift advanced.md"),
+            body: "Protocols and generics",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
     ]
 
     func testANDSearchRequiresAllTerms() {
@@ -271,8 +286,18 @@ final class SearchEngineTests: XCTestCase {
 final class LinkResolverTests: XCTestCase {
 
     let notes = [
-        Note(filename: "202604271321 Structured contexts.md", body: ""),
-        Note(filename: "202604271322 Another note.md",        body: ""),
+        Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321 Structured contexts.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
+        Note(
+            url: URL(fileURLWithPath: "/tmp/202604271322 Another note.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
     ]
 
     func testResolvesExactID() {
@@ -295,27 +320,59 @@ final class LinkResolverTests: XCTestCase {
 }
 ```
 
+### Supported File Extensions
+```swift
+// 読み込み対応拡張子（The Archive互換）
+static let supportedExtensions = ["md", "txt"]
+
+// 新規作成は常に.md固定
+static let defaultExtension = "md"
+```
+- `.md`: Markdownノート（primary）
+- `.txt`: The Archiveの既存ノートとの互換性のため読み込みのみ対応
+- 新規作成は常に`.md`
+
 ### NoteFilenameParserTests.swift
 ```swift
 final class NoteFilenameParserTests: XCTestCase {
 
     func testExtractsTimestampID() {
-        let note = Note(filename: "202604271321 My title.md")
+        let note = Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321 My title.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         XCTAssertEqual(note.timestampID, "202604271321")
     }
 
     func testExtractsTitleAfterTimestamp() {
-        let note = Note(filename: "202604271321 My title.md")
+        let note = Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321 My title.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         XCTAssertEqual(note.title, "My title")
     }
 
     func testIDOnlyFilenameHasEmptyTitle() {
-        let note = Note(filename: "202604271321.md")
+        let note = Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         XCTAssertEqual(note.title, "")
     }
 
     func testTitleWithMultipleSpaces() {
-        let note = Note(filename: "202604271321 Long title with spaces.md")
+        let note = Note(
+            url: URL(fileURLWithPath: "/tmp/202604271321 Long title with spaces.md"),
+            body: "",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         XCTAssertEqual(note.title, "Long title with spaces")
     }
 }
