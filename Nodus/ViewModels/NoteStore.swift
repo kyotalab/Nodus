@@ -277,4 +277,72 @@ final class NoteStore: ObservableObject {
         metadataReloadDebounceWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + metadataReloadDebounceInterval, execute: work)
     }
+
+#if DEBUG
+    /// DEBUG + Simulator の動作確認専用ダミーデータを注入する。
+    /// 本番ビルドにはコンパイルされないため、後で安全に削除できる。
+    func loadDebugDummyNotesForSimulator() {
+        let now = Date()
+
+        // 検索と wiki link 挙動を確認しやすいよう、本文に多様な語彙を入れる。
+        notes = [
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271321 Swift basics.md"),
+                body: """
+                SwiftUI layout notes.
+                Start with stacks, modifiers, and navigation patterns.
+                Link to advanced note: [[202604271325]]
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271322 Networking checklist.md"),
+                body: """
+                URLSession retry strategy and timeout values.
+                Add logging for request and response headers.
+                Related architecture note: [[202604271326]]
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271323 Writing workflow.txt"),
+                body: """
+                Capture quick ideas, then connect them with links.
+                Review weekly and extract evergreen notes.
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271324 Search engine behavior.md"),
+                body: """
+                Test keyword matching in filename and body.
+                Query examples: swift tutorial, networking timeout, evergreen.
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271325 Advanced Swift patterns.md"),
+                body: """
+                Protocol-oriented design, generics, and type erasure.
+                Backlink source example: [[202604271321]]
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+            Note(
+                url: URL(fileURLWithPath: "/tmp/202604271326 Architecture map.md"),
+                body: """
+                Domain, data, and presentation boundaries.
+                See networking checklist: [[202604271322]]
+                """,
+                createdAt: now,
+                updatedAt: now
+            ),
+        ]
+    }
+#endif
 }

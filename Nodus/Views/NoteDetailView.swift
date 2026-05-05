@@ -22,8 +22,13 @@ struct NoteDetailView: View {
         }
         .navigationTitle(note.displayName)
         .task(id: note.url) {
-            // 詳細表示時にだけ本文を読み込む（一覧表示の高速化）。
-            loadedBody = store.loadBody(for: note)
+            // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
+            if !note.body.isEmpty {
+                loadedBody = note.body
+            } else {
+                // 実ファイル運用時は従来どおり遅延ロードする。
+                loadedBody = store.loadBody(for: note)
+            }
         }
     }
 }

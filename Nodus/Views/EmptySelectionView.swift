@@ -10,10 +10,9 @@ import SwiftUI
 /// iPad などでノートが選ばれていないときに詳細側へ表示する空状態。
 struct EmptySelectionView: View {
     var body: some View {
-        ContentUnavailableView(
-            "ノートを選択",
-            systemImage: "doc.text",
-            description: Text("一覧からノートを選ぶと、ここに内容が表示されます。")
-        )
+        // 仕様どおり、未選択時はテキスト案内を出さずロゴ相当のみを表示する。
+        Text("Nodus")
+            .font(.system(size: 40, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
     }
 }
