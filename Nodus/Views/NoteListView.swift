@@ -10,6 +10,15 @@ import SwiftUI
 /// ノート一覧。iPad 等では `List(selection:)` で Split の詳細と同期し、
 /// iPhone（コンパクト幅）では `NavigationStack` + `NavigationPath` でプッシュ遷移する。
 struct NoteListView: View {
+    /// 一覧の並び順。選択状態は `@AppStorage` で永続化する。
+    enum SortOrder: String, CaseIterable {
+        case updatedDesc = "Updated (newest)"
+        case createdDesc = "Created (newest)"
+        case titleAsc = "Title (A-Z)"
+        case backlinkDesc = "Most linked"
+        case random = "Random"
+    }
+
     /// 一覧の出し分け（`Binding` を含むため `Equatable` にはしない）
     enum Style {
         /// `NavigationSplitView` のサイドバー用。選択は `timestampID`（`String`）で行う。
@@ -25,23 +34,57 @@ struct NoteListView: View {
     @State private var compactNavigationPath = NavigationPath()
     /// 検索バー入力。空文字のときは全件表示する。
     @State private var searchQuery = ""
+    /// 並び順の選択を永続化する。
+    @AppStorage("sortOrder") private var sortOrderRawValue = SortOrder.updatedDesc.rawValue
+    /// Random 並び順を安定保持するための ID 順序キャッシュ。
+    @State private var randomOrderIDs: [String] = []
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
         SearchEngine.search(searchQuery, in: store.notes)
     }
 
+    /// 検索後の結果に対して現在のソート順を適用した最終表示一覧。
+    private var sortedNotes: [Note] {
+        sort(filteredNotes, by: currentSortOrder)
+    }
+
     /// 「検索クエリあり」かつ「結果 0 件」のときに空状態 UI を出す。
     private var shouldShowEmptySearchState: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && filteredNotes.isEmpty
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && sortedNotes.isEmpty
+    }
+
+    /// 文字列保存値から現在の並び順を復元する（不正値はデフォルトへフォールバック）。
+    private var currentSortOrder: SortOrder {
+        SortOrder(rawValue: sortOrderRawValue) ?? .updatedDesc
     }
 
     var body: some View {
-        switch style {
-        case .splitSidebar(let selection):
-            splitSidebarList(selection: selection)
-        case .compactStack:
-            compactStackList
+        Group {
+            switch style {
+            case .splitSidebar(let selection):
+                splitSidebarList(selection: selection)
+            case .compactStack:
+                compactStackList
+            }
+        }
+        .onAppear {
+            // 初期表示時に Random が選ばれている場合の順序を準備する。
+            if currentSortOrder == .random {
+                reshuffleRandomOrder()
+            }
+        }
+        .onChange(of: searchQuery) { _, _ in
+            // Random 中に検索条件が変わった場合は、対象集合に対して並び順を作り直す。
+            if currentSortOrder == .random {
+                reshuffleRandomOrder()
+            }
+        }
+        .onChange(of: store.notes) { _, _ in
+            // データ更新時も Random のキャッシュ順を再生成して不整合を防ぐ。
+            if currentSortOrder == .random {
+                reshuffleRandomOrder()
+            }
         }
     }
 
@@ -57,7 +100,7 @@ struct NoteListView: View {
                         addNote(splitSelection: selection)
                     }
                 } else {
-                    ForEach(filteredNotes) { note in
+                    ForEach(sortedNotes) { note in
                         Text(note.displayName)
                             .tag(Optional(note.id))
                     }
@@ -73,6 +116,9 @@ struct NoteListView: View {
             .autocorrectionDisabled()
             .navigationTitle("Notes")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    sortMenu
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         addNote(splitSelection: selection)
@@ -97,7 +143,7 @@ struct NoteListView: View {
                         addNote(splitSelection: nil)
                     }
                 } else {
-                    ForEach(filteredNotes) { note in
+                    ForEach(sortedNotes) { note in
                         NavigationLink(value: note.id) {
                             Text(note.displayName)
                         }
@@ -119,6 +165,9 @@ struct NoteListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    sortMenu
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         addNote(splitSelection: nil)
@@ -139,5 +188,73 @@ struct NoteListView: View {
         } else {
             compactNavigationPath.append(note.id)
         }
+    }
+
+    /// ソート選択 UI。現在選択中の項目にはチェックマークを表示する。
+    private var sortMenu: some View {
+        Menu {
+            ForEach(SortOrder.allCases, id: \.rawValue) { order in
+                Button {
+                    selectSortOrder(order)
+                } label: {
+                    if currentSortOrder == order {
+                        Label(order.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(order.rawValue)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+        }
+        .accessibilityLabel("Sort notes")
+    }
+
+    /// ソート種別に応じてノート配列を並べ替える。
+    private func sort(_ notes: [Note], by order: SortOrder) -> [Note] {
+        switch order {
+        case .updatedDesc:
+            return notes.sorted { $0.updatedAt > $1.updatedAt }
+        case .createdDesc:
+            return notes.sorted { $0.createdAt > $1.createdAt }
+        case .titleAsc:
+            return notes.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .backlinkDesc:
+            // バックリンク数はソート時にだけ一度計算してキャッシュする。
+            let backlinkCache = Dictionary(
+                uniqueKeysWithValues: notes.map { note in
+                    (note.id, LinkResolver.backlinkCount(for: note, in: store.notes))
+                }
+            )
+            return notes.sorted { lhs, rhs in
+                let lhsCount = backlinkCache[lhs.id] ?? 0
+                let rhsCount = backlinkCache[rhs.id] ?? 0
+                if lhsCount == rhsCount {
+                    return lhs.updatedAt > rhs.updatedAt
+                }
+                return lhsCount > rhsCount
+            }
+        case .random:
+            // Random はキャッシュ済み ID 順序に合わせて表示する。
+            let orderMap = Dictionary(uniqueKeysWithValues: randomOrderIDs.enumerated().map { ($1, $0) })
+            return notes.sorted { lhs, rhs in
+                let lhsIndex = orderMap[lhs.id] ?? .max
+                let rhsIndex = orderMap[rhs.id] ?? .max
+                return lhsIndex < rhsIndex
+            }
+        }
+    }
+
+    /// 並び順選択を保存し、Random 選択時は毎回新しいシャッフルを生成する。
+    private func selectSortOrder(_ order: SortOrder) {
+        sortOrderRawValue = order.rawValue
+        if order == .random {
+            reshuffleRandomOrder()
+        }
+    }
+
+    /// 現在の検索結果集合に対して Random 順序を再生成する。
+    private func reshuffleRandomOrder() {
+        randomOrderIDs = filteredNotes.map(\.id).shuffled()
     }
 }

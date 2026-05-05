@@ -228,7 +228,10 @@ final class NoteStore: ObservableObject {
             object: query,
             queue: queue
         ) { [weak self] _ in
-            self?.handleMetadataUpdate()
+            // 通知クロージャは非同期文脈のため、MainActor に戻してから更新処理を呼ぶ。
+            Task { @MainActor [weak self] in
+                self?.handleMetadataUpdate()
+            }
         }
         metadataQueryObservers.append(finishObserver)
 
@@ -238,7 +241,10 @@ final class NoteStore: ObservableObject {
             object: query,
             queue: queue
         ) { [weak self] _ in
-            self?.handleMetadataUpdate()
+            // 通知クロージャは非同期文脈のため、MainActor に戻してから更新処理を呼ぶ。
+            Task { @MainActor [weak self] in
+                self?.handleMetadataUpdate()
+            }
         }
         metadataQueryObservers.append(updateObserver)
 
