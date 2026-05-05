@@ -38,6 +38,8 @@ struct NoteListView: View {
     @AppStorage("sortOrder") private var sortOrderRawValue = SortOrder.updatedDesc.rawValue
     /// Random 並び順を安定保持するための ID 順序キャッシュ。
     @State private var randomOrderIDs: [String] = []
+    /// スワイプ削除時に確認ダイアログへ渡す対象ノート。
+    @State private var noteToDelete: Note?
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
@@ -103,6 +105,14 @@ struct NoteListView: View {
                     ForEach(sortedNotes) { note in
                         Text(note.displayName)
                             .tag(Optional(note.id))
+                            .swipeActions(edge: .trailing) {
+                                // 右スワイプで削除確認を開始する。
+                                Button(role: .destructive) {
+                                    noteToDelete = note
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }
@@ -128,6 +138,17 @@ struct NoteListView: View {
                     .accessibilityLabel("New note")
                 }
             }
+            .alert(item: $noteToDelete) { note in
+                // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
+                Alert(
+                    title: Text("Delete '\(deleteDisplayTitle(for: note))'?"),
+                    message: Text("This cannot be undone."),
+                    primaryButton: .cancel(Text("Cancel")),
+                    secondaryButton: .destructive(Text("Delete")) {
+                        store.deleteNote(note)
+                    }
+                )
+            }
         }
     }
 
@@ -146,6 +167,14 @@ struct NoteListView: View {
                     ForEach(sortedNotes) { note in
                         NavigationLink(value: note.id) {
                             Text(note.displayName)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            // コンパクト表示でも同じ削除導線を提供する。
+                            Button(role: .destructive) {
+                                noteToDelete = note
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -176,6 +205,17 @@ struct NoteListView: View {
                     }
                     .accessibilityLabel("New note")
                 }
+            }
+            .alert(item: $noteToDelete) { note in
+                // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
+                Alert(
+                    title: Text("Delete '\(deleteDisplayTitle(for: note))'?"),
+                    message: Text("This cannot be undone."),
+                    primaryButton: .cancel(Text("Cancel")),
+                    secondaryButton: .destructive(Text("Delete")) {
+                        store.deleteNote(note)
+                    }
+                )
             }
         }
     }
@@ -256,5 +296,11 @@ struct NoteListView: View {
     /// 現在の検索結果集合に対して Random 順序を再生成する。
     private func reshuffleRandomOrder() {
         randomOrderIDs = filteredNotes.map(\.id).shuffled()
+    }
+
+    /// 削除確認ダイアログに表示するタイトル文字列を返す。
+    /// タイトルが空の場合は timestampID を使う。
+    private func deleteDisplayTitle(for note: Note) -> String {
+        note.title.isEmpty ? note.timestampID : note.title
     }
 }

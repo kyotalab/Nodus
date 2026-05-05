@@ -56,6 +56,14 @@ final class NoteStore: ObservableObject {
     /// 指定フォルダ内の `.md` ファイル一覧を読み込み、`notes` を更新する。
     /// 本文はまだ読まず、`body` は空文字で初期化する（遅延ロード）。
     func loadNotes() {
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: 実ファイル読み込みは行わず、メモリ上の notes をそのまま使う。
+        // folderBookmark 未設定でも警告を出さず、そのまま return して状態を維持する。
+        return
+#endif
+#endif
+
         guard let folderBookmark else {
             print("⚠️ NoteStore.loadNotes: FolderBookmark is not configured.")
             notes = []
@@ -105,6 +113,23 @@ final class NoteStore: ObservableObject {
     /// 現在時刻ベースの `YYYYMMDDHHmm.md` を作成し、一覧の先頭へ追加する。
     @discardableResult
     func createNote() -> Note? {
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: folderBookmark が未設定でもメモリ上で新規ノートを作成する。
+        let now = Date()
+        let stamp = DateFormatter.noteTimestamp.string(from: now)
+        let filename = "\(stamp).md"
+        let note = Note(
+            url: URL(fileURLWithPath: "/tmp/\(filename)"),
+            body: "",
+            createdAt: now,
+            updatedAt: now
+        )
+        notes.insert(note, at: 0)
+        return note
+#endif
+#endif
+
         guard let folderBookmark else {
             print("⚠️ NoteStore.createNote: FolderBookmark is not configured.")
             return nil
@@ -137,6 +162,19 @@ final class NoteStore: ObservableObject {
 
     /// ノート本文をファイルへ保存し、`updatedAt` を現在時刻に更新する。
     func saveNote(_ note: Note) {
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: ファイル保存を行わず、メモリ上の notes だけ更新する。
+        if let index = notes.firstIndex(where: { $0.url == note.url }) {
+            var updated = notes[index]
+            updated.body = note.body
+            updated.updatedAt = Date()
+            notes[index] = updated
+        }
+        return
+#endif
+#endif
+
         guard let folderBookmark else {
             print("⚠️ NoteStore.saveNote: FolderBookmark is not configured.")
             return
@@ -161,6 +199,14 @@ final class NoteStore: ObservableObject {
 
     /// ノートのファイルを削除し、一覧からも取り除く。
     func deleteNote(_ note: Note) {
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: ファイル削除は行わず、メモリ上の notes からのみ削除する。
+        notes.removeAll { $0.url == note.url }
+        return
+#endif
+#endif
+
         guard let folderBookmark else {
             print("⚠️ NoteStore.deleteNote: FolderBookmark is not configured.")
             return
@@ -178,6 +224,13 @@ final class NoteStore: ObservableObject {
 
     /// 詳細表示時に本文を都度読み込む（遅延ロード）。
     func loadBody(for note: Note) -> String {
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: 実ファイル読み込みを行わず、メモリ上の notes から本文を返す。
+        return notes.first(where: { $0.url == note.url })?.body ?? ""
+#endif
+#endif
+
         guard let folderBookmark else {
             print("⚠️ NoteStore.loadBody: FolderBookmark is not configured.")
             return ""
