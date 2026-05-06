@@ -21,6 +21,8 @@ struct NoteDetailView: View {
     @State private var editingTitle = ""
     /// 編集モード/プレビューモードの切替状態。現時点では編集モード固定開始。
     @State private var isEditing: Bool = true
+    /// 本文またはタイトルに未保存変更があるかを管理するフラグ。
+    @State private var hasUnsavedChanges = false
     /// 本文変更時の自動保存を 2 秒遅延させるためのワークアイテム。
     @State private var autosaveWorkItem: DispatchWorkItem?
     /// キーボードツールバー表示のため、TextEditor のフォーカス状態を保持する。
@@ -45,10 +47,21 @@ struct NoteDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     titleEditor
 
+                    // 編集モード中のみ、未保存変更の状態を補助テキストで表示する。
+                    if hasUnsavedChanges {
+                        Text("Unsaved changes")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
                     TextEditor(text: $loadedBody)
                         .font(.system(.body, design: .monospaced))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .focused($isEditorFocused)
                         .onChange(of: loadedBody) { _, _ in
+                            // 本文が変化したら未保存フラグを立てる。
+                            hasUnsavedChanges = true
                             scheduleAutosave()
                         }
                 }
@@ -180,6 +193,8 @@ struct NoteDetailView: View {
         autosaveWorkItem = nil
         store.saveNote(noteForSave)
         refreshCurrentNoteFromStore()
+        // 保存処理が完了したため、未保存フラグを下ろす。
+        hasUnsavedChanges = false
     }
 
     /// キーボードツールバーの入力を本文末尾へ追加する（案A）。
@@ -192,8 +207,14 @@ struct NoteDetailView: View {
     private var titleEditor: some View {
         TextField("Untitled", text: $editingTitle)
             .font(.headline)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             .submitLabel(.done)
             .focused($isTitleFocused)
+            .onChange(of: editingTitle) { _, _ in
+                // タイトルが変化したら未保存フラグを立てる。
+                hasUnsavedChanges = true
+            }
             .onSubmit {
                 commitTitle()
             }
@@ -213,6 +234,8 @@ struct NoteDetailView: View {
 
         currentNote = renamed
         editingTitle = renamed.title
+        // タイトル変更のコミットが完了したため、未保存フラグを下ろす。
+        hasUnsavedChanges = false
     }
 
     /// 保存やリネーム後に、一覧側の最新メタデータを取り直して表示の一貫性を保つ。
