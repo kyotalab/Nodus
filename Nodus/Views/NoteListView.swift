@@ -58,6 +58,11 @@ struct NoteListView: View {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && sortedNotes.isEmpty
     }
 
+    /// ノートが1件もなく、検索クエリも空のときに初回空状態を表示する。
+    private var shouldShowEmptyNoteState: Bool {
+        store.notes.isEmpty && searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// 文字列保存値から現在の並び順を復元する（不正値はデフォルトへフォールバック）。
     private var currentSortOrder: SortOrder {
         SortOrder(rawValue: sortOrderRawValue) ?? .updatedDesc
@@ -96,7 +101,14 @@ struct NoteListView: View {
     private func splitSidebarList(selection: Binding<String?>) -> some View {
         NavigationStack {
             List(selection: selection) {
-                if shouldShowEmptySearchState {
+                if shouldShowEmptyNoteState {
+                    // 初回空状態では、作成導線を含むメッセージを表示する。
+                    ContentUnavailableView {
+                        Label("Your knowledge network starts here", systemImage: "network")
+                    } description: {
+                        Text("Tap + to create your first note")
+                    }
+                } else if shouldShowEmptySearchState {
                     // 結果ゼロ時は、メッセージと新規作成アクションを表示する。
                     Text("Nothing found for \"\(searchQuery)\"")
                         .foregroundStyle(.secondary)
@@ -170,7 +182,14 @@ struct NoteListView: View {
     private var compactStackList: some View {
         NavigationStack(path: $compactNavigationPath) {
             List {
-                if shouldShowEmptySearchState {
+                if shouldShowEmptyNoteState {
+                    // コンパクト表示でも同じ初回空状態メッセージを表示する。
+                    ContentUnavailableView {
+                        Label("Your knowledge network starts here", systemImage: "network")
+                    } description: {
+                        Text("Tap + to create your first note")
+                    }
+                } else if shouldShowEmptySearchState {
                     // コンパクト表示でも同じ UX を維持する。
                     Text("Nothing found for \"\(searchQuery)\"")
                         .foregroundStyle(.secondary)
