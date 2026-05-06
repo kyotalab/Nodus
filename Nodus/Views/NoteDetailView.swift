@@ -10,6 +10,8 @@ import SwiftUI
 /// 1件のノートの詳細。PHASE 4 では編集/プレビュー切替と自動保存を担う。
 struct NoteDetailView: View {
     @EnvironmentObject private var store: NoteStore
+    /// Settings で選んだ初期エディタモード（edit / preview）を参照する。
+    @AppStorage("defaultEditorMode") private var defaultEditorMode = "edit"
     let note: Note
     /// リネーム後の URL を追従できるよう、編集中ノートの実体をローカル状態で持つ。
     @State private var currentNote: Note
@@ -27,6 +29,8 @@ struct NoteDetailView: View {
     @FocusState private var isTitleFocused: Bool
     /// プレビュー内の wiki リンクタップで遷移するための宛先ノート。
     @State private var linkedNoteForNavigation: Note?
+    /// 画面初期表示時にだけ defaultEditorMode を適用するためのフラグ。
+    @State private var hasAppliedDefaultMode = false
 
     init(note: Note) {
         self.note = note
@@ -99,6 +103,12 @@ struct NoteDetailView: View {
             }
         }
         .task(id: currentNote.id) {
+            // Settings の既定モードを初回表示時にだけ反映する。
+            if !hasAppliedDefaultMode {
+                isEditing = defaultEditorMode != "preview"
+                hasAppliedDefaultMode = true
+            }
+
             // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
             if !currentNote.body.isEmpty {
                 loadedBody = currentNote.body

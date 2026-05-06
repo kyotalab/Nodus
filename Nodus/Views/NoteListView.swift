@@ -40,6 +40,8 @@ struct NoteListView: View {
     @State private var randomOrderIDs: [String] = []
     /// スワイプ削除時に確認ダイアログへ渡す対象ノート。
     @State private var noteToDelete: Note?
+    /// Settings シートの表示状態。
+    @State private var isShowingSettings = false
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
@@ -126,6 +128,15 @@ struct NoteListView: View {
             .autocorrectionDisabled()
             .navigationTitle("Notes")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        // 一覧画面から設定をシート表示する。
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -137,6 +148,9 @@ struct NoteListView: View {
                     }
                     .accessibilityLabel("New note")
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView()
             }
             .alert(item: $noteToDelete) { note in
                 // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
@@ -194,6 +208,15 @@ struct NoteListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        // コンパクト表示でも同じ設定導線を提供する。
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -205,6 +228,9 @@ struct NoteListView: View {
                     }
                     .accessibilityLabel("New note")
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView()
             }
             .alert(item: $noteToDelete) { note in
                 // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
