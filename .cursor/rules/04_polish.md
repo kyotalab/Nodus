@@ -70,6 +70,60 @@ Commit:   renames file to "202604271321 Structured contexts should....md"
 - Title containing `/` → strip or replace with `-`
 - Extremely long title → truncate filename to 200 chars total
 
+### Title Editing（実装パターン）
+```swift
+// タイトル編集フィールド
+@State private var editingTitle = ""
+@FocusState private var isTitleFocused: Bool
+
+TextField("Untitled", text: $editingTitle)
+    .font(.headline)
+    .focused($isTitleFocused)
+    .onSubmit { commitTitle() }
+
+// フォーカスを失ったらコミット
+.onChange(of: isTitleFocused) { _, focused in
+    if !focused { commitTitle() }
+}
+
+// 新規作成時は自動フォーカス
+.task(id: note.url) {
+    if note.title.isEmpty {
+        isTitleFocused = true
+    }
+}
+```
+
+### Date Display in Preview Mode
+- Display: プレビューモードのみ・本文下部
+- Format: "yyyy-MM-dd HH:mm"
+- Style: .caption / .secondary
+- Fields: createdAt / updatedAt（ファイルシステムメタデータから取得）
+- Rationale: The Archiveユーザーのフロントマター手動管理を不要にする
+
+### renameNote()のDEBUG分岐パターン
+```swift
+#if DEBUG
+#if targetEnvironment(simulator)
+// メモリ上でnotes配列のfilenameを更新する（ファイル操作なし）
+if let index = notes.firstIndex(where: { $0.url == note.url }) {
+    let newFilename = newTitle.isEmpty
+        ? "\(note.timestampID).md"
+        : "\(note.timestampID) \(newTitle).md"
+    let newURL = URL(fileURLWithPath: "/tmp/\(newFilename)")
+    notes[index] = Note(
+        url: newURL,
+        body: notes[index].body,
+        createdAt: notes[index].createdAt,
+        updatedAt: Date()
+    )
+    return notes[index]
+}
+return nil
+#endif
+#endif
+```
+
 ---
 
 ## Area 3: Swipe Actions on Note List

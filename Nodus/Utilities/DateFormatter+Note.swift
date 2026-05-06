@@ -19,4 +19,14 @@ extension DateFormatter {
         formatter.dateFormat = "yyyyMMddHHmm"
         return formatter
     }()
+
+    /// ノート詳細で作成/更新日時を表示するためのフォーマッタ（例: 2026-05-03 22:59）。
+    static let noteDisplayTimestamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter
+    }()
 }

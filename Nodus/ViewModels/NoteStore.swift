@@ -197,6 +197,70 @@ final class NoteStore: ObservableObject {
         }
     }
 
+    /// ノートタイトルを変更し、タイムスタンプ ID を保持したままファイル名だけをリネームする。
+    /// - Parameters:
+    ///   - note: 変更対象ノート
+    ///   - newTitle: 新しいタイトル（空の場合は ID のみファイル名）
+    /// - Returns: 更新後の Note。失敗時は nil。
+    @discardableResult
+    func renameNote(_ note: Note, newTitle: String) -> Note? {
+        // ファイル名として使えない文字は除去し、前後空白はトリムする。
+        let sanitizedTitle = newTitle.replacingOccurrences(of: "/", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let newFilename = sanitizedTitle.isEmpty
+            ? "\(note.timestampID).md"
+            : "\(note.timestampID) \(sanitizedTitle).md"
+
+#if DEBUG
+#if targetEnvironment(simulator)
+        // DEBUG シミュレータ専用: ファイル操作を行わず、メモリ上の notes のみ更新する。
+        if let index = notes.firstIndex(where: { $0.url == note.url }) {
+            let updatedAt = Date()
+            let newURL = URL(fileURLWithPath: "/tmp/\(newFilename)")
+            notes[index] = Note(
+                url: newURL,
+                body: notes[index].body,
+                createdAt: notes[index].createdAt,
+                updatedAt: updatedAt
+            )
+            return notes[index]
+        }
+        return nil
+#endif
+#endif
+
+        guard let folderBookmark else {
+            print("⚠️ NoteStore.renameNote: FolderBookmark is not configured.")
+            return nil
+        }
+
+        do {
+            let renamed = try folderBookmark.withScopedAccess { _ in
+                let destinationURL = note.url.deletingLastPathComponent().appendingPathComponent(newFilename)
+
+                // 同名なら実ファイル移動は不要なため、そのまま日時だけ更新して返す。
+                if destinationURL != note.url {
+                    try FileManager.default.moveItem(at: note.url, to: destinationURL)
+                }
+
+                let updatedAt = Date()
+                return Note(
+                    url: destinationURL,
+                    body: note.body,
+                    createdAt: note.createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+
+            if let index = notes.firstIndex(where: { $0.url == note.url }) {
+                notes[index] = renamed
+            }
+            return renamed
+        } catch {
+            print("❌ NoteStore.renameNote failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// ノートのファイルを削除し、一覧からも取り除く。
     func deleteNote(_ note: Note) {
 #if DEBUG

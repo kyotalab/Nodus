@@ -11,38 +11,65 @@ import SwiftUI
 struct NoteDetailView: View {
     @EnvironmentObject private var store: NoteStore
     let note: Note
+    /// リネーム後の URL を追従できるよう、編集中ノートの実体をローカル状態で持つ。
+    @State private var currentNote: Note
     /// 編集中の本文。初期表示時にノート本文またはファイルから読み込んでセットする。
     @State private var loadedBody = ""
+    /// タイトル編集用テキスト。空文字は Untitled プレースホルダで扱う。
+    @State private var editingTitle = ""
     /// 編集モード/プレビューモードの切替状態。現時点では編集モード固定開始。
     @State private var isEditing: Bool = true
     /// 本文変更時の自動保存を 2 秒遅延させるためのワークアイテム。
     @State private var autosaveWorkItem: DispatchWorkItem?
     /// キーボードツールバー表示のため、TextEditor のフォーカス状態を保持する。
     @FocusState private var isEditorFocused: Bool
+    /// タイトル入力のフォーカス状態。Return またはフォーカス離脱でコミットする。
+    @FocusState private var isTitleFocused: Bool
     /// プレビュー内の wiki リンクタップで遷移するための宛先ノート。
     @State private var linkedNoteForNavigation: Note?
+
+    init(note: Note) {
+        self.note = note
+        _currentNote = State(initialValue: note)
+        _editingTitle = State(initialValue: note.title)
+    }
 
     var body: some View {
         Group {
             if isEditing {
-                // 編集モード: TextEditor でプレーンテキストを編集する。
-                TextEditor(text: $loadedBody)
-                    .font(.system(.body, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .focused($isEditorFocused)
-                    .onChange(of: loadedBody) { _, _ in
-                        scheduleAutosave()
-                    }
+                // 編集モード: タイトル入力 + 本文編集。
+                VStack(alignment: .leading, spacing: 12) {
+                    titleEditor
+
+                    TextEditor(text: $loadedBody)
+                        .font(.system(.body, design: .monospaced))
+                        .focused($isEditorFocused)
+                        .onChange(of: loadedBody) { _, _ in
+                            scheduleAutosave()
+                        }
+                }
+                .padding(.horizontal, 8)
             } else {
-                // プレビューモード: Markdown を AttributedString で描画する。
+                // プレビューモード: タイトル入力 + Markdown 表示 + 日時表示。
                 ScrollView {
-                    Text(markdownPreviewText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+                    VStack(alignment: .leading, spacing: 12) {
+                        titleEditor
+
+                        Text(markdownPreviewText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // プレビュー時のみ、本文の下に作成/更新日時を表示する。
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Created  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.createdAt))")
+                            Text("Updated  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.updatedAt))")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding()
                 }
             }
         }
-        .navigationTitle(note.displayName)
         .navigationDestination(item: $linkedNoteForNavigation) { linkedNote in
             // wiki リンクタップ時は同じ詳細画面をさらに積んで遷移する。
             NoteDetailView(note: linkedNote)
@@ -71,18 +98,25 @@ struct NoteDetailView: View {
                 }
             }
         }
-        .task(id: note.url) {
+        .task(id: currentNote.id) {
             // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
-            if !note.body.isEmpty {
-                loadedBody = note.body
+            if !currentNote.body.isEmpty {
+                loadedBody = currentNote.body
             } else {
                 // 実ファイル運用時は従来どおり遅延ロードする。
-                loadedBody = store.loadBody(for: note)
+                loadedBody = store.loadBody(for: currentNote)
+            }
+            editingTitle = currentNote.title
+
+            // 新規作成（タイトル空）の直後は、タイトル入力へ自動フォーカスする。
+            if currentNote.title.isEmpty {
+                isTitleFocused = true
             }
         }
         .onDisappear {
             // 画面離脱時に保留中の保存タスクを破棄し、内容は即時保存する。
             autosaveWorkItem?.cancel()
+            commitTitle()
             saveImmediately()
         }
         .environment(\.openURL, OpenURLAction { url in
@@ -103,11 +137,19 @@ struct NoteDetailView: View {
             // モード切替後の入力体験を安定させるため、編集モードに戻ったらフォーカスを戻す。
             isEditorFocused = newValue
         }
+        .onChange(of: isTitleFocused) { _, focused in
+            // タイトルをタップしたら編集モードへ入り、離脱時はタイトル確定を行う。
+            if focused {
+                isEditing = true
+            } else {
+                commitTitle()
+            }
+        }
     }
 
     /// 現在の本文を反映した保存用 Note を作る。
     private var noteForSave: Note {
-        var editable = note
+        var editable = currentNote
         editable.body = loadedBody
         return editable
     }
@@ -127,12 +169,47 @@ struct NoteDetailView: View {
         autosaveWorkItem?.cancel()
         autosaveWorkItem = nil
         store.saveNote(noteForSave)
+        refreshCurrentNoteFromStore()
     }
 
     /// キーボードツールバーの入力を本文末尾へ追加する（案A）。
     private func appendToEditor(_ text: String) {
         loadedBody += text
         isEditorFocused = true
+    }
+
+    /// 画面上部で常に表示するタイトル編集フィールド。
+    private var titleEditor: some View {
+        TextField("Untitled", text: $editingTitle)
+            .font(.headline)
+            .submitLabel(.done)
+            .focused($isTitleFocused)
+            .onSubmit {
+                commitTitle()
+            }
+    }
+
+    /// タイトル変更を NoteStore に反映し、成功時はローカル状態も更新する。
+    private func commitTitle() {
+        let normalizedInput = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedCurrent = currentNote.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedInput != normalizedCurrent else { return }
+
+        guard let renamed = store.renameNote(noteForSave, newTitle: editingTitle) else {
+            // 失敗時は現在のタイトル表示へ戻し、UIと実体の差分を解消する。
+            editingTitle = currentNote.title
+            return
+        }
+
+        currentNote = renamed
+        editingTitle = renamed.title
+    }
+
+    /// 保存やリネーム後に、一覧側の最新メタデータを取り直して表示の一貫性を保つ。
+    private func refreshCurrentNoteFromStore() {
+        if let latest = store.notes.first(where: { $0.id == currentNote.id }) {
+            currentNote = latest
+        }
     }
 
     /// Markdown を描画用文字列へ変換する（失敗時は生テキスト表示）。

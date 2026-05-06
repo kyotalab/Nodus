@@ -125,6 +125,9 @@ Settings
 | Immersion | Simple (navigation bar always visible) |
 | Keyboard Toolbar | `#`  `**`  `*`  `>`  `[[`  `Tab` |
 | Title Editing | Tap title area to begin editing — commits on Return or focus lost |
+| Title Placement | Inline TextField at top of NoteDetailView (shown in both Edit and Preview) |
+| New Note Focus | If title is empty on open, auto-focus title field |
+| Preview Metadata | Show `Created` / `Updated` under body in preview mode only |
 
 ### Keyboard Toolbar Behavior
 | Button | Inserts | Cursor Position |
