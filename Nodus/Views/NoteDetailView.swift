@@ -13,6 +13,9 @@ struct NoteDetailView: View {
     /// Settings で選んだ初期エディタモード（edit / preview）を参照する。
     @AppStorage("defaultEditorMode") private var defaultEditorMode = "edit"
     let note: Note
+    /// iPad の `NavigationSplitView` 詳細列など、外側に `NavigationStack` が無いときだけ `true`（wiki 用プッシュのため）。
+    /// iPhone の `compactStack` では外側に既に `NavigationStack` があるため `false` のままにする。
+    var embedInNavigationStack: Bool = false
     /// リネーム後の URL を追従できるよう、編集中ノートの実体をローカル状態で持つ。
     @State private var currentNote: Note
     /// 編集中の本文。初期表示時にノート本文またはファイルから読み込んでセットする。
@@ -29,113 +32,147 @@ struct NoteDetailView: View {
     @FocusState private var isEditorFocused: Bool
     /// タイトル入力のフォーカス状態。Return またはフォーカス離脱でコミットする。
     @FocusState private var isTitleFocused: Bool
-    /// プレビュー内の wiki リンクタップで遷移するための宛先ノート。
+    /// プレビュー内 wiki リンクで遷移する宛先ノート（`NavigationLink` の destination に渡す）。
     @State private var linkedNoteForNavigation: Note?
+    /// wiki リンクからのプッシュ遷移を有効化するフラグ（`NavigationStack` + `NavigationLink` 案）。
+    @State private var isNavigatingToLinkedNote = false
     /// 画面初期表示時にだけ defaultEditorMode を適用するためのフラグ。
     @State private var hasAppliedDefaultMode = false
     /// WKWebView プレビューの内容高さ（外側の ScrollView と二重スクロールを避ける）。
     @State private var markdownPreviewWebHeight: CGFloat = 200
 
-    init(note: Note) {
+    init(note: Note, embedInNavigationStack: Bool = false) {
         self.note = note
+        self.embedInNavigationStack = embedInNavigationStack
         _currentNote = State(initialValue: note)
         _editingTitle = State(initialValue: note.title)
     }
 
     var body: some View {
         Group {
-            if isEditing {
-                // 編集モード: タイトル入力 + 本文編集。
-                VStack(alignment: .leading, spacing: 12) {
-                    titleEditor
-
-                    // 編集モード中のみ、未保存変更の状態を補助テキストで表示する。
-                    if hasUnsavedChanges {
-                        Text("Unsaved changes")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    TextEditor(text: $loadedBody)
-                        .font(.system(.body, design: .monospaced))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($isEditorFocused)
-                        .onChange(of: loadedBody) { _, _ in
-                            // 本文が変化したら未保存フラグを立てる。
-                            hasUnsavedChanges = true
-                            scheduleAutosave()
-                        }
+            if embedInNavigationStack {
+                NavigationStack {
+                    noteDetailScaffold
                 }
-                .padding(.horizontal, 8)
             } else {
-                // プレビューモード: タイトル入力 + Markdown 表示 + 日時表示。
-                ScrollView {
+                noteDetailScaffold
+            }
+        }
+    }
+
+    /// 編集／プレビューとツールバー、wiki 用 `NavigationLink`（外側 `NavigationStack` は `embedInNavigationStack` で任意）。
+    private var noteDetailScaffold: some View {
+        Group {
+                if isEditing {
+                    // 編集モード: タイトル入力 + 本文編集。
                     VStack(alignment: .leading, spacing: 12) {
                         titleEditor
 
-                        // marked.js + WKWebView で GFM プレビュー（wiki は Swift 側で nodus リンク化済み）。
-                        MarkdownWebView(
-                            markdown: markdownSourceForWebPreview,
-                            onLinkTapped: { id in
-                                if let resolved = LinkResolver.resolve(id, in: store.notes) {
-                                    linkedNoteForNavigation = resolved
-                                }
-                            },
-                            onContentHeightChange: { markdownPreviewWebHeight = max($0, 44) }
-                        )
-                        .frame(height: markdownPreviewWebHeight)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        // プレビュー時のみ、本文の下に作成/更新日時を表示する。
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Created  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.createdAt))")
-                            Text("Updated  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.updatedAt))")
+                        // 編集モード中のみ、未保存変更の状態を補助テキストで表示する。
+                        if hasUnsavedChanges {
+                            Text("Unsaved changes")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+                        TextEditor(text: $loadedBody)
+                            .font(.system(.body, design: .monospaced))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($isEditorFocused)
+                            .onChange(of: loadedBody) { _, _ in
+                                // 本文が変化したら未保存フラグを立てる。
+                                hasUnsavedChanges = true
+                                scheduleAutosave()
+                            }
                     }
-                    .padding()
+                    .padding(.horizontal, 8)
+                } else {
+                    // プレビューモード: タイトル入力 + Markdown 表示 + 日時表示。
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            titleEditor
+
+                            // marked.js + WKWebView で GFM プレビュー（wiki は Swift 側で nodus リンク化済み）。
+                            MarkdownWebView(
+                                markdown: markdownSourceForWebPreview,
+                                onLinkTapped: { id in
+                                    if let resolved = LinkResolver.resolve(id, in: store.notes) {
+                                        linkedNoteForNavigation = resolved
+                                        isNavigatingToLinkedNote = true
+                                    }
+                                },
+                                onContentHeightChange: { markdownPreviewWebHeight = max($0, 44) }
+                            )
+                            .frame(height: markdownPreviewWebHeight)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            // プレビュー時のみ、本文の下に作成/更新日時を表示する。
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Created  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.createdAt))")
+                                Text("Updated  \(DateFormatter.noteDisplayTimestamp.string(from: currentNote.updatedAt))")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                    }
                 }
             }
-        }
-        .navigationDestination(item: $linkedNoteForNavigation) { linkedNote in
-            // wiki リンクタップ時は同じ詳細画面をさらに積んで遷移する。
-            NoteDetailView(note: linkedNote)
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                // 右上（右端側）: Edit / Preview 切替。
-                Button(isEditing ? "Preview" : "Edit") {
-                    toggleEditPreviewMode()
-                }
-                // iPad 外付けキーボード: ⌘E で編集／プレビュー切替（ボタンと同じ処理）。
-                .keyboardShortcut("e", modifiers: .command)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                // 共有ボタンは Edit の左隣（primaryAction では後から宣言したほうが中央寄り）に配置する。
-                ShareLink(
-                    item: loadedBody,
-                    subject: Text(editingTitle.isEmpty ? currentNote.timestampID : editingTitle),
-                    message: Text(editingTitle.isEmpty ? "" : editingTitle)
+            // 外側に `NavigationStack` が無い（iPad 詳細列）ときは `embedInNavigationStack` で包む。
+            // 非表示 `NavigationLink` で wiki 先へプッシュする。
+            .background {
+                NavigationLink(
+                    destination: wikiLinkNavigationDestination,
+                    isActive: $isNavigatingToLinkedNote
                 ) {
-                    Image(systemName: "square.and.arrow.up")
+                    EmptyView()
                 }
-                .accessibilityLabel("Share")
+                .accessibilityHidden(true)
+                .frame(width: 0, height: 0)
             }
-            if isEditing {
-                ToolbarItemGroup(placement: .keyboard) {
-                    // 案A: カーソル厳密制御は行わず、入力テキストを末尾に追加する。
-                    Button("#") { appendToEditor("# ") }
-                    Button("**") { appendToEditor("****") }
-                    Button("*") { appendToEditor("**") }
-                    Button(">") { appendToEditor("> ") }
-                    Button("[[") { appendToEditor("[[]]") }
-                    Button("⇥") { appendToEditor("\t") }
-                    Spacer()
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    // 右上（右端側）: Edit / Preview 切替。
+                    Button(isEditing ? "Preview" : "Edit") {
+                        toggleEditPreviewMode()
+                    }
+                    // VoiceOver: 現在モードに応じて次に入るモードを説明する。
+                    .accessibilityLabel(isEditing ? "Switch to preview mode" : "Switch to edit mode")
+                    // iPad 外付けキーボード: ⌘E で編集／プレビュー切替（ボタンと同じ処理）。
+                    .keyboardShortcut("e", modifiers: .command)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    // 共有ボタンは Edit の左隣（primaryAction では後から宣言したほうが中央寄り）に配置する。
+                    ShareLink(
+                        item: loadedBody,
+                        subject: Text(editingTitle.isEmpty ? currentNote.timestampID : editingTitle),
+                        message: Text(editingTitle.isEmpty ? "" : editingTitle)
+                    ) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    // 仕様どおり: VoiceOver 用「Share」（要件確認済み）。
+                    .accessibilityLabel("Share")
+                }
+                if isEditing {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        // 案A: カーソル厳密制御は行わず、入力テキストを末尾に追加する。
+                        Button("#") { appendToEditor("# ") }
+                            .accessibilityLabel("Insert heading")
+                        Button("**") { appendToEditor("****") }
+                            .accessibilityLabel("Insert bold")
+                        Button("*") { appendToEditor("**") }
+                            .accessibilityLabel("Insert italic")
+                        Button(">") { appendToEditor("> ") }
+                            .accessibilityLabel("Insert blockquote")
+                        Button("[[") { appendToEditor("[[]]") }
+                            .accessibilityLabel("Insert wiki link")
+                        Button("⇥") { appendToEditor("\t") }
+                            .accessibilityLabel("Insert tab")
+                        Spacer()
+                    }
                 }
             }
-        }
         .task(id: currentNote.id) {
             // Settings の既定モードを初回表示時にだけ反映する。
             if !hasAppliedDefaultMode {
@@ -174,6 +211,7 @@ struct NoteDetailView: View {
 
             if let resolved = LinkResolver.resolve(id, in: store.notes) {
                 linkedNoteForNavigation = resolved
+                isNavigatingToLinkedNote = true
                 return .handled
             } else {
                 // 解決できない ID は遷移させない。
@@ -191,6 +229,22 @@ struct NoteDetailView: View {
             } else {
                 commitTitle()
             }
+        }
+        .onChange(of: isNavigatingToLinkedNote) { _, isActive in
+            // リンク先から戻ったら宛先をクリアし、次のタップで同じノートへ飛べるようにする。
+            if !isActive {
+                linkedNoteForNavigation = nil
+            }
+        }
+    }
+
+    /// wiki `NavigationLink` の遷移先（アクティブ時のみ `linkedNoteForNavigation` が入る）。
+    @ViewBuilder
+    private var wikiLinkNavigationDestination: some View {
+        if let linkedNoteForNavigation {
+            NoteDetailView(note: linkedNoteForNavigation, embedInNavigationStack: false)
+        } else {
+            EmptyView()
         }
     }
 

@@ -13,13 +13,15 @@ struct ContentView: View {
     /// 横並びの列が「レギュラー」かどうか（iPhone 縦は通常 `.compact`）
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// iPad の Split では `Note` 丸ごとの `List(selection:)` がタグ一致に失敗することがあるため、ID 文字列で選ぶ。
+    /// サイドバー `List(selection:)` と共有する選択ノート ID（`nil` = 未選択）。
+    /// `String` は `Note.id`（先頭 12 桁タイムスタンプ）と一致させる。
     @State private var selectedNoteID: String?
 
     var body: some View {
         Group {
             if horizontalSizeClass == .regular {
                 NavigationSplitView {
+                    // `$selectedNoteID` をそのまま渡し、一覧タップで更新 → detail が再評価される。
                     NoteListView(style: .splitSidebar(selection: $selectedNoteID))
                 } detail: {
                     detailPane
@@ -30,11 +32,14 @@ struct ContentView: View {
         }
     }
 
-    /// 詳細ペイン。選択 ID に対応する `Note` をストアから引き直す（一覧と常に同じインスタンスを指す）。
+    /// 詳細ペイン。`selectedNoteID` はここでは書き換えない（一覧の `List` が唯一の更新元）。
     @ViewBuilder
     private var detailPane: some View {
         if let id = selectedNoteID, let note = store.notes.first(where: { $0.id == id }) {
-            NoteDetailView(note: note)
+            // 詳細列には外側 `NavigationStack` が無いため wiki 用に内側へ包む（iPhone compact では二重になるのを避け `false`）。
+            NoteDetailView(note: note, embedInNavigationStack: true)
+                // 選択切替で `@State` が前ノートのまま残らないようにする。
+                .id(id)
         } else {
             EmptySelectionView()
         }

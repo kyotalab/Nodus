@@ -146,8 +146,9 @@ Settings
 | Shortcut | Action |
 |----------|--------|
 | ⌘N | New note (same as +) |
-| ⌘F | Focus search field |
 | ⌘E | Toggle Edit / Preview (in note detail) |
+
+> Focus search (⌘F) is deferred — may be reintroduced later without affecting `List(selection:)`.
 
 ## Sync
 - iCloud Drive ubiquity container
@@ -245,6 +246,11 @@ Nodus/
 ## UI Language
 - All UI text must be in English (button labels, navigation titles, alerts, empty states)
 - Note content written by the user may be in any language
+
+## Accessibility (VoiceOver)
+- Primary controls use `.accessibilityLabel` in English (toolbar, list rows, keyboard insert buttons, share, empty selection).
+- Note list row label: title if present, otherwise timestamp ID, plus formatted `updated` time (`DateFormatter.noteDisplayTimestamp`).
+- iPad empty detail: `EmptySelectionView` combines title + tagline for a single spoken label.
 
 ## Coding Conventions
 - Follow SwiftUI best practices

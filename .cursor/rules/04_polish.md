@@ -216,10 +216,12 @@ struct Note {
 
 ## Area 6: Accessibility
 
-- All buttons have `.accessibilityLabel`
-- Note list rows have meaningful labels: `"\(note.title), updated \(note.updatedAt)"`
-- Keyboard toolbar buttons have labels: `"Insert heading"`, `"Insert bold"` etc.
-- Support Dynamic Type (avoid fixed font sizes)
+- Toolbar / list controls use English `.accessibilityLabel` strings (see `NoteListView`, `NoteDetailView`, `EmptySelectionView`).
+- Note list rows: `"\(title or timestampID), updated yyyy-MM-dd HH:mm)"` via `DateFormatter.noteDisplayTimestamp`.
+- Keyboard toolbar (edit mode): `Insert heading`, `Insert bold`, `Insert italic`, `Insert blockquote`, `Insert wiki link`, `Insert tab`.
+- Edit/Preview toggle: `Switch to preview mode` / `Switch to edit mode` depending on current mode.
+- iPad empty selection: combined element label `Nodus. Plain text, connected thinking.`
+- Support Dynamic Type (avoid fixed font sizes in app UI)
 
 ---
 
@@ -247,8 +249,9 @@ Implemented in-app via `.keyboardShortcut` (see `NoteListView`, `NoteDetailView`
 | Shortcut | Action |
 |----------|--------|
 | ⌘N | New note |
-| ⌘F | Focus search |
 | ⌘E | Toggle edit/preview |
+
+> ⌘F (focus search) removed for now; to be reimplemented separately.
 
 ### Drag and Drop
 - Notes can be dragged from list and dropped into other apps as `.md` files
@@ -264,7 +267,7 @@ Implemented in-app via `.keyboardShortcut` (see `NoteListView`, `NoteDetailView`
 - [ ] Swipe-to-delete with confirmation alert
 - [ ] Empty state views for: no notes, no search results, no selection (iPad)
 - [ ] Note bodies loaded lazily (not all at startup)
-- [ ] Accessibility labels on all interactive elements
+- [x] Accessibility labels on all interactive elements
 - [ ] Dynamic Type supported throughout
 - [x] iPad keyboard shortcuts for new note, search, toggle
 - [ ] Tested on both iPhone and iPad simulators

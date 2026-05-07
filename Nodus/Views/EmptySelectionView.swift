@@ -25,6 +25,9 @@ struct EmptySelectionView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+        // VoiceOver: 2 行のテキストを 1 つの要素として読み上げる。
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Nodus. Plain text, connected thinking.")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }

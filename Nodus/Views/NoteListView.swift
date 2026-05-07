@@ -42,8 +42,6 @@ struct NoteListView: View {
     @State private var noteToDelete: Note?
     /// Settings シートの表示状態。
     @State private var isShowingSettings = false
-    /// 検索バー（`.searchable`）へフォーカスを移す。⌘F 用。外付けキーボード向け。
-    @State private var isSearchFieldPresented = false
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
@@ -100,91 +98,89 @@ struct NoteListView: View {
     }
 
     /// iPad / ワイド: `List(selection:)` と詳細ペインを `timestampID` で同期。
+    /// サイドバー内に `NavigationStack` を置かない（`NavigationSplitView` と二重になり
+    /// `List(selection:)` のバインディング更新が親へ届かなくなることがあるため）。
     private func splitSidebarList(selection: Binding<String?>) -> some View {
-        NavigationStack {
-            List(selection: selection) {
-                if shouldShowEmptyNoteState {
-                    // 初回空状態では、作成導線を含むメッセージを表示する。
-                    ContentUnavailableView {
-                        Label("Your knowledge network starts here", systemImage: "network")
-                    } description: {
-                        Text("Tap + to create your first note")
-                    }
-                } else if shouldShowEmptySearchState {
-                    // 結果ゼロ時は、メッセージと新規作成アクションを表示する。
-                    Text("Nothing found for \"\(searchQuery)\"")
-                        .foregroundStyle(.secondary)
-                    Button("+ Create new note") {
-                        addNote(splitSelection: selection)
-                    }
-                } else {
-                    ForEach(sortedNotes) { note in
-                        Text(note.displayName)
-                            .tag(Optional(note.id))
-                            .swipeActions(edge: .trailing) {
-                                // 右スワイプで削除確認を開始する。
-                                Button(role: .destructive) {
-                                    noteToDelete = note
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+        List(selection: selection) {
+            if shouldShowEmptyNoteState {
+                // 初回空状態では、作成導線を含むメッセージを表示する。
+                ContentUnavailableView {
+                    Label("Your knowledge network starts here", systemImage: "network")
+                } description: {
+                    Text("Tap + to create your first note")
+                }
+            } else if shouldShowEmptySearchState {
+                // 結果ゼロ時は、メッセージと新規作成アクションを表示する。
+                Text("Nothing found for \"\(searchQuery)\"")
+                    .foregroundStyle(.secondary)
+                Button("+ Create new note") {
+                    addNote(splitSelection: selection)
+                }
+                .accessibilityLabel("Create new note")
+            } else {
+                ForEach(sortedNotes) { note in
+                    Text(note.displayName)
+                        .swipeActions(edge: .trailing) {
+                            // 右スワイプで削除確認を開始する。
+                            Button(role: .destructive) {
+                                noteToDelete = note
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
-                    }
+                        }
+                        .accessibilityLabel(noteRowAccessibilityLabel(for: note))
+                        .tag(Optional(note.id))
                 }
             }
-            // 検索バーは常時表示し、入力に応じて filteredNotes を更新する。
-            // `isPresented` は ⌘F で検索フィールドへフォーカスを当てるために使う。
-            .searchable(
-                text: $searchQuery,
-                isPresented: $isSearchFieldPresented,
-                placement: .navigationBarDrawer(displayMode: .always)
+        }
+        // サイドバー列に `NavigationStack` を置かないため、検索・タイトル・ツールバーはすべて `List` に直接付与する。
+        .searchable(
+            text: $searchQuery,
+            placement: .navigationBarDrawer(displayMode: .always)
+        )
+        // Zettelkasten の検索入力は小文字をデフォルトとするため自動大文字化を無効化する。
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .navigationTitle("Notes")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    // 一覧画面から設定をシート表示する。
+                    isShowingSettings = true
+                } label: {
+                    Image(systemName: "gear")
+                }
+                // 仕様どおり: VoiceOver 用短い英語ラベル。
+                .accessibilityLabel("Settings")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                sortMenu
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    addNote(splitSelection: selection)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                // 仕様どおり: VoiceOver 用短い英語ラベル。
+                .accessibilityLabel("New note")
+                // iPad 外付けキーボード: ⌘N で新規ノート（+ と同じ処理）。
+                .keyboardShortcut("n", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
+        }
+        .alert(item: $noteToDelete) { note in
+            // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
+            Alert(
+                title: Text("Delete '\(deleteDisplayTitle(for: note))'?"),
+                message: Text("This cannot be undone."),
+                primaryButton: .cancel(Text("Cancel")),
+                secondaryButton: .destructive(Text("Delete")) {
+                    store.deleteNote(note)
+                }
             )
-            // Zettelkasten の検索入力は小文字をデフォルトとするため自動大文字化を無効化する。
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .navigationTitle("Notes")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        // 一覧画面から設定をシート表示する。
-                        isShowingSettings = true
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                    .accessibilityLabel("Settings")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    sortMenu
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        addNote(splitSelection: selection)
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("New note")
-                    // iPad 外付けキーボード: ⌘N で新規ノート（+ と同じ処理）。
-                    .keyboardShortcut("n", modifiers: .command)
-                }
-            }
-            .sheet(isPresented: $isShowingSettings) {
-                SettingsView()
-            }
-            .alert(item: $noteToDelete) { note in
-                // 削除は必ず確認ダイアログを経由し、誤操作を防ぐ。
-                Alert(
-                    title: Text("Delete '\(deleteDisplayTitle(for: note))'?"),
-                    message: Text("This cannot be undone."),
-                    primaryButton: .cancel(Text("Cancel")),
-                    secondaryButton: .destructive(Text("Delete")) {
-                        store.deleteNote(note)
-                    }
-                )
-            }
-            // 画面外のゼロサイズボタンで ⌘F を受け、検索バーへフォーカスを移す。
-            .overlay(alignment: .topLeading) {
-                searchFieldFocusShortcutButton
-            }
         }
     }
 
@@ -206,11 +202,14 @@ struct NoteListView: View {
                     Button("+ Create new note") {
                         addNote(splitSelection: nil)
                     }
+                    .accessibilityLabel("Create new note")
                 } else {
                     ForEach(sortedNotes) { note in
                         NavigationLink(value: note.id) {
                             Text(note.displayName)
                         }
+                        // VoiceOver: 行全体をリンクとして、タイトル／ID と更新日時で説明する。
+                        .accessibilityLabel(noteRowAccessibilityLabel(for: note))
                         .swipeActions(edge: .trailing) {
                             // コンパクト表示でも同じ削除導線を提供する。
                             Button(role: .destructive) {
@@ -223,10 +222,8 @@ struct NoteListView: View {
                 }
             }
             // iPhone 系レイアウトにも検索バーを常時表示する。
-            // `isPresented` は ⌘F で検索フィールドへフォーカスを当てるために使う。
             .searchable(
                 text: $searchQuery,
-                isPresented: $isSearchFieldPresented,
                 placement: .navigationBarDrawer(displayMode: .always)
             )
             // コンパクト表示でも検索入力時の自動大文字化を無効化する。
@@ -246,6 +243,7 @@ struct NoteListView: View {
                     } label: {
                         Image(systemName: "gear")
                     }
+                    // 仕様どおり: VoiceOver 用短い英語ラベル。
                     .accessibilityLabel("Settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -257,6 +255,7 @@ struct NoteListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    // 仕様どおり: VoiceOver 用短い英語ラベル。
                     .accessibilityLabel("New note")
                     // iPad 外付けキーボード: ⌘N で新規ノート（+ と同じ処理）。
                     .keyboardShortcut("n", modifiers: .command)
@@ -276,22 +275,7 @@ struct NoteListView: View {
                     }
                 )
             }
-            .overlay(alignment: .topLeading) {
-                searchFieldFocusShortcutButton
-            }
         }
-    }
-
-    /// ⌘F: 検索バー展開／フォーカス。可視 UI は出さずショートカットだけを登録する。
-    private var searchFieldFocusShortcutButton: some View {
-        Button {
-            isSearchFieldPresented = true
-        } label: {
-            Color.clear.frame(width: 1, height: 1)
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut("f", modifiers: .command)
-        .accessibilityHidden(true)
     }
 
     /// `createNote()` 後、Split なら `selectedNoteID` を更新、コンパクトならナビゲーションパスに積む。
@@ -321,7 +305,15 @@ struct NoteListView: View {
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
         }
+        // 仕様どおり: VoiceOver 用「Sort notes」（要件確認済み）。
         .accessibilityLabel("Sort notes")
+    }
+
+    /// ノート一覧行の VoiceOver ラベル。タイトルが空のときはタイムスタンプ ID を使い、更新日時を付与する。
+    private func noteRowAccessibilityLabel(for note: Note) -> String {
+        let displayTitle = deleteDisplayTitle(for: note)
+        let formatted = DateFormatter.noteDisplayTimestamp.string(from: note.updatedAt)
+        return "\(displayTitle), updated \(formatted)"
     }
 
     /// ソート種別に応じてノート配列を並べ替える。
