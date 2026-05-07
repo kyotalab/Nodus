@@ -82,7 +82,7 @@ func resolveLink(_ id: String, in notes: [Note]) -> Note? {
 |-------|---------|
 | No notes (first launch) | "Your knowledge network starts here" + "Tap + to create your first note" |
 | Search no results | `Nothing found for "[query]"` + tappable "+ Create new note" row |
-| iPad no selection | Nodus logo only |
+| iPad no selection | Wordmark "Nodus" + tagline (typography only, no bitmap logo) |
 
 ## Delete Confirmation
 | Element | Text |

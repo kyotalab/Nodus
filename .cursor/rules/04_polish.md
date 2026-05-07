@@ -178,11 +178,13 @@ Buttons: [Cancel] [Delete]               ← Delete is destructive (red)
 ```
 ┌─────────────────────────┐
 │                         │
-│      [Nodus Logo]       │
+│         Nodus           │  ← .largeTitle, .thin, .secondary
+│ Plain text, connected   │  ← .caption, .secondary
+│       thinking          │
 │                         │
 └─────────────────────────┘
 ```
-> Logo only — no text. Clean and minimal.
+> Typography-only branding (no bitmap logo). Clean and minimal.
 
 ---
 
