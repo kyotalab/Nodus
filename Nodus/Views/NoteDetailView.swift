@@ -33,6 +33,8 @@ struct NoteDetailView: View {
     @State private var linkedNoteForNavigation: Note?
     /// 画面初期表示時にだけ defaultEditorMode を適用するためのフラグ。
     @State private var hasAppliedDefaultMode = false
+    /// WKWebView プレビューの内容高さ（外側の ScrollView と二重スクロールを避ける）。
+    @State private var markdownPreviewWebHeight: CGFloat = 200
 
     init(note: Note) {
         self.note = note
@@ -72,8 +74,18 @@ struct NoteDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         titleEditor
 
-                        Text(markdownPreviewText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // marked.js + WKWebView で GFM プレビュー（wiki は Swift 側で nodus リンク化済み）。
+                        MarkdownWebView(
+                            markdown: markdownSourceForWebPreview,
+                            onLinkTapped: { id in
+                                if let resolved = LinkResolver.resolve(id, in: store.notes) {
+                                    linkedNoteForNavigation = resolved
+                                }
+                            },
+                            onContentHeightChange: { markdownPreviewWebHeight = max($0, 44) }
+                        )
+                        .frame(height: markdownPreviewWebHeight)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                         // プレビュー時のみ、本文の下に作成/更新日時を表示する。
                         VStack(alignment: .leading, spacing: 2) {
@@ -135,6 +147,9 @@ struct NoteDetailView: View {
             if currentNote.title.isEmpty {
                 isTitleFocused = true
             }
+
+            // ノート切替時は WKWebView の高さを初期化し、前ノートのレイアウト残りを避ける。
+            markdownPreviewWebHeight = 200
         }
         .onDisappear {
             // 画面離脱時に保留中の保存タスクを破棄し、内容は即時保存する。
@@ -245,17 +260,28 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Markdown を描画用文字列へ変換する（失敗時は生テキスト表示）。
-    private var markdownPreviewText: AttributedString {
-        // STEP 1: 解決済み `[[ID]]` を一時的な markdown リンクへ変換する。
-        let transformed = replacingResolvedWikiLinksWithMarkdownLinks(in: loadedBody)
+    /// 解決済み wiki を nodus リンク化し、未解決は Web 用 span でグレー表示する Markdown 文字列。
+    private var markdownSourceForWebPreview: String {
+        let withLinks = replacingResolvedWikiLinksWithMarkdownLinks(in: loadedBody)
+        return wrappingUnresolvedWikiLinksInHTMLSpans(in: withLinks)
+    }
 
-        // STEP 2: markdown としてレンダリングする。
-        var attributed = (try? AttributedString(markdown: transformed)) ?? AttributedString(transformed)
+    /// 残存する `[[ID]]`（未解決のみ）を CSS クラス付き span で包み、marked の HTML パススルーで色を付ける。
+    private func wrappingUnresolvedWikiLinksInHTMLSpans(in body: String) -> String {
+        let pattern = /\[\[.+?\]\]/
+        var result = ""
+        var cursor = body.startIndex
 
-        // 未解決 `[[ID]]` はグレーで表示し、解決済みリンクとの差を明示する。
-        applyUnresolvedWikiLinkStyle(to: &attributed)
-        return attributed
+        for match in body.matches(of: pattern) {
+            let range = match.range
+            let full = String(match.0)
+            result += String(body[cursor..<range.lowerBound])
+            result += "<span class=\"nodus-wiki-unresolved\">\(full)</span>"
+            cursor = range.upperBound
+        }
+
+        result += String(body[cursor...])
+        return result
     }
 
     /// `[[ID]]` を走査し、解決済みのみ `[ID](nodus://ID)` へ置換する。
@@ -285,23 +311,5 @@ struct NoteDetailView: View {
         // 末尾に残った通常テキストを追加する。
         result += String(body[cursor...])
         return result
-    }
-
-    /// 未解決 wiki リンク表記 `[[...]]` の文字色をシステムグレーにする。
-    private func applyUnresolvedWikiLinkStyle(to attributed: inout AttributedString) {
-        let source = String(attributed.characters)
-        let pattern = /\[\[(.+?)\]\]/
-
-        for match in source.matches(of: pattern) {
-            let id = String(match.1)
-            guard LinkResolver.resolve(id, in: store.notes) == nil else { continue }
-
-            guard
-                let lower = AttributedString.Index(match.range.lowerBound, within: attributed),
-                let upper = AttributedString.Index(match.range.upperBound, within: attributed)
-            else { continue }
-
-            attributed[lower..<upper].foregroundColor = .gray
-        }
     }
 }

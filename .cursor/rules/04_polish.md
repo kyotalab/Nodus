@@ -275,3 +275,28 @@ Implement a minimal Settings screen accessible from the note list toolbar:
 | File rename race condition | Disable title field during rename operation |
 | Memory spike loading all bodies | Load lazily, cache with size limit |
 | Search feels slow | Run search on background thread, publish results on main |
+
+---
+
+## Future Improvements
+
+### List Auto-continuation
+- 編集モードで Return キーを押したとき、前の行のリスト記号を自動継続する。
+- 対応パターン:
+  - `- テキスト` → 次の行に `- ` を挿入
+  - `* テキスト` → 次の行に `* ` を挿入
+  - `1. テキスト` → 次の行に `2. ` を挿入
+  - `- [ ] テキスト` → 次の行に `- [ ] ` を挿入
+  - 空のリスト行で Return を押したらリスト終了（記号を挿入しない）
+- 実装方針: `TextEditor` を `UITextView` ベースの `UIViewRepresentable` に置き換える必要がある。
+- 優先度: 低（なくても使えるアプリとして成立している）
+
+### Syntax Highlighting in Edit Mode
+- 編集モードで Markdown 記法に応じた色分け表示。
+- 実装方針: `UITextView` + `NSAttributedString` のカスタム実装またはサードパーティライブラリ。
+- 優先度: 低
+
+### Code Block Syntax Highlighting in Preview Mode
+- プレビューモードのコードブロックにシンタックスハイライトを追加。
+- 実装方針: highlight.js を CDN から追加読み込み。
+- 優先度: 低

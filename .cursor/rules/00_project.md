@@ -16,7 +16,7 @@ This loop is the core experience. Every design decision should support it.
 - **UI Framework**: SwiftUI
 - **Minimum Deployment Target**: iOS 17+
 - **Persistence**: Plain text files via iCloud Drive (ubiquity container)
-- **External Dependencies**: None (avoid unless absolutely necessary)
+- **External Dependencies**: None at compile time (avoid SPM/Pods unless necessary). Preview mode loads **marked.js** from cdnjs at runtime inside `WKWebView`.
 
 ## File Specification
 | Item | Detail |
@@ -104,13 +104,16 @@ Settings
 ```
 
 ## Markdown Rendering (Preview Mode)
+**Implementation**: `WKWebView` + **marked.js** (GFM) loaded from [cdnjs.cloudflare.com](https://cdnjs.cloudflare.com) — not `AttributedString(markdown:)`.
+
 | Element | Rendered |
 |---------|---------|
 | Headings, Bold, Italic, Blockquote | ✅ |
 | Inline code, Code block | ✅ |
 | Lists (ordered/unordered), Horizontal rule | ✅ |
-| Strikethrough, Table, Footnotes | ✅ |
-| `[[wiki links]]` | ✅ System blue/gray |
+| Strikethrough, Table, GFM line breaks | ✅ (via marked GFM) |
+| Footnotes (`[^ref]`) | ❌ (not enabled) |
+| `[[wiki links]]` | ✅ System blue (`#007AFF`) / gray (`#8E8E93`) — resolved as `nodus://` links in HTML |
 | Images (`![alt](url)`) | ❌ Alt text only |
 
 ## Note Creation UX (Hybrid)
@@ -220,6 +223,7 @@ Nodus/
 │   ├── ContentView.swift
 │   ├── NoteListView.swift
 │   ├── NoteDetailView.swift
+│   ├── MarkdownWebView.swift
 │   └── EmptySelectionView.swift
 ├── ViewModels/
 │   └── NoteStore.swift
