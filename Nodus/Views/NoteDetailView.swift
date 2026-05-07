@@ -105,7 +105,7 @@ struct NoteDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                // 右上ボタンで Edit / Preview を切り替える。
+                // 右上（右端側）: Edit / Preview 切替。
                 Button(isEditing ? "Preview" : "Edit") {
                     if isEditing {
                         // 編集からプレビューへ移るときは未保存内容を即時保存する。
@@ -113,6 +113,17 @@ struct NoteDetailView: View {
                     }
                     isEditing.toggle()
                 }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                // 共有ボタンは Edit の左隣（primaryAction では後から宣言したほうが中央寄り）に配置する。
+                ShareLink(
+                    item: loadedBody,
+                    subject: Text(editingTitle.isEmpty ? currentNote.timestampID : editingTitle),
+                    message: Text(editingTitle.isEmpty ? "" : editingTitle)
+                ) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("Share")
             }
             if isEditing {
                 ToolbarItemGroup(placement: .keyboard) {
