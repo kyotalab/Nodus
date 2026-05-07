@@ -45,7 +45,7 @@ Initial release.
 ---
 
 ## Support URL
-https://github.com/YOURNAME/Nodus
+https://github.com/kyotalab/Nodus
 
 ## Marketing URL (optional)
 （空白でOK）

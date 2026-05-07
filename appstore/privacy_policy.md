@@ -56,6 +56,6 @@ If this policy changes, the updated version will be posted at the Support URL be
 
 If you have questions about this Privacy Policy, please contact:
 
-[YOUR NAME]
-[YOUR EMAIL]
-[Support URL: https://github.com/YOURNAME/Nodus]
+Kyota Nakada
+kyouta.nakada@gmail.com
+[Support URL: https://github.com/kyotalab/Nodus]
