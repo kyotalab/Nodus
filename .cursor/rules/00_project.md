@@ -259,3 +259,10 @@ Nodus/
 - Keep views small and composable
 - No force unwrapping (`!`) without explicit comment explaining why it's safe
 - Core/ files must be pure functions with no SwiftUI or UIKit imports
+
+### NavigationSplitView の構造ルール
+- サイドバー列（`NoteListView` splitSidebar）: `NavigationStack` を入れない
+- 詳細列（`ContentView` detailPane）: `NoteDetailView(embedInNavigationStack: true)` を渡す
+- iPhone compact 列（`NoteListView` compactStack）: `NavigationStack` を 1 つだけ持ち、`NoteDetailView` はデフォルト（`embedInNavigationStack: false`）で呼ぶ
+- wiki リンクの遷移は `NoteDetailView` 内の `NavigationLink` が担う
+- `NoteDetailView(note:).id(id)` でノート切替時に `@State` をリセットする
