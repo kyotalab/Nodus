@@ -142,6 +142,13 @@ Settings
 | `[[` | `[[]]` | Between brackets |
 | `Tab` | `\t` | After tab |
 
+### iPad hardware keyboard (external keyboard)
+| Shortcut | Action |
+|----------|--------|
+| ⌘N | New note (same as +) |
+| ⌘F | Focus search field |
+| ⌘E | Toggle Edit / Preview (in note detail) |
+
 ## Sync
 - iCloud Drive ubiquity container
 - On first launch, user selects their Zettelkasten folder via system folder picker

@@ -242,11 +242,13 @@ Implement a minimal Settings screen accessible from the note list toolbar:
 ## Area 7: iPad-Specific Polish
 
 ### Keyboard Shortcuts (iPad with hardware keyboard)
-```swift
-.keyboardShortcut("n", modifiers: .command)  // New note
-.keyboardShortcut("f", modifiers: .command)  // Focus search
-.keyboardShortcut("e", modifiers: .command)  // Toggle edit/preview
-```
+Implemented in-app via `.keyboardShortcut` (see `NoteListView`, `NoteDetailView`):
+
+| Shortcut | Action |
+|----------|--------|
+| ⌘N | New note |
+| ⌘F | Focus search |
+| ⌘E | Toggle edit/preview |
 
 ### Drag and Drop
 - Notes can be dragged from list and dropped into other apps as `.md` files
@@ -264,7 +266,7 @@ Implement a minimal Settings screen accessible from the note list toolbar:
 - [ ] Note bodies loaded lazily (not all at startup)
 - [ ] Accessibility labels on all interactive elements
 - [ ] Dynamic Type supported throughout
-- [ ] iPad keyboard shortcuts for new note, search, toggle
+- [x] iPad keyboard shortcuts for new note, search, toggle
 - [ ] Tested on both iPhone and iPad simulators
 - [ ] Tested on real device with actual iCloud notes
 

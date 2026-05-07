@@ -107,12 +107,10 @@ struct NoteDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 // 右上（右端側）: Edit / Preview 切替。
                 Button(isEditing ? "Preview" : "Edit") {
-                    if isEditing {
-                        // 編集からプレビューへ移るときは未保存内容を即時保存する。
-                        saveImmediately()
-                    }
-                    isEditing.toggle()
+                    toggleEditPreviewMode()
                 }
+                // iPad 外付けキーボード: ⌘E で編集／プレビュー切替（ボタンと同じ処理）。
+                .keyboardShortcut("e", modifiers: .command)
             }
             ToolbarItem(placement: .primaryAction) {
                 // 共有ボタンは Edit の左隣（primaryAction では後から宣言したほうが中央寄り）に配置する。
@@ -227,6 +225,15 @@ struct NoteDetailView: View {
     private func appendToEditor(_ text: String) {
         loadedBody += text
         isEditorFocused = true
+    }
+
+    /// ツールバーおよび ⌘E と共通の、編集／プレビュー切替処理。
+    private func toggleEditPreviewMode() {
+        if isEditing {
+            // 編集からプレビューへ移るときは未保存内容を即時保存する。
+            saveImmediately()
+        }
+        isEditing.toggle()
     }
 
     /// 画面上部で常に表示するタイトル編集フィールド。

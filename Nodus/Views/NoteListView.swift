@@ -42,6 +42,8 @@ struct NoteListView: View {
     @State private var noteToDelete: Note?
     /// Settings シートの表示状態。
     @State private var isShowingSettings = false
+    /// 検索バー（`.searchable`）へフォーカスを移す。⌘F 用。外付けキーボード向け。
+    @State private var isSearchFieldPresented = false
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
@@ -131,8 +133,10 @@ struct NoteListView: View {
                 }
             }
             // 検索バーは常時表示し、入力に応じて filteredNotes を更新する。
+            // `isPresented` は ⌘F で検索フィールドへフォーカスを当てるために使う。
             .searchable(
                 text: $searchQuery,
+                isPresented: $isSearchFieldPresented,
                 placement: .navigationBarDrawer(displayMode: .always)
             )
             // Zettelkasten の検索入力は小文字をデフォルトとするため自動大文字化を無効化する。
@@ -159,6 +163,8 @@ struct NoteListView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("New note")
+                    // iPad 外付けキーボード: ⌘N で新規ノート（+ と同じ処理）。
+                    .keyboardShortcut("n", modifiers: .command)
                 }
             }
             .sheet(isPresented: $isShowingSettings) {
@@ -174,6 +180,10 @@ struct NoteListView: View {
                         store.deleteNote(note)
                     }
                 )
+            }
+            // 画面外のゼロサイズボタンで ⌘F を受け、検索バーへフォーカスを移す。
+            .overlay(alignment: .topLeading) {
+                searchFieldFocusShortcutButton
             }
         }
     }
@@ -213,8 +223,10 @@ struct NoteListView: View {
                 }
             }
             // iPhone 系レイアウトにも検索バーを常時表示する。
+            // `isPresented` は ⌘F で検索フィールドへフォーカスを当てるために使う。
             .searchable(
                 text: $searchQuery,
+                isPresented: $isSearchFieldPresented,
                 placement: .navigationBarDrawer(displayMode: .always)
             )
             // コンパクト表示でも検索入力時の自動大文字化を無効化する。
@@ -246,6 +258,8 @@ struct NoteListView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("New note")
+                    // iPad 外付けキーボード: ⌘N で新規ノート（+ と同じ処理）。
+                    .keyboardShortcut("n", modifiers: .command)
                 }
             }
             .sheet(isPresented: $isShowingSettings) {
@@ -262,7 +276,22 @@ struct NoteListView: View {
                     }
                 )
             }
+            .overlay(alignment: .topLeading) {
+                searchFieldFocusShortcutButton
+            }
         }
+    }
+
+    /// ⌘F: 検索バー展開／フォーカス。可視 UI は出さずショートカットだけを登録する。
+    private var searchFieldFocusShortcutButton: some View {
+        Button {
+            isSearchFieldPresented = true
+        } label: {
+            Color.clear.frame(width: 1, height: 1)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("f", modifiers: .command)
+        .accessibilityHidden(true)
     }
 
     /// `createNote()` 後、Split なら `selectedNoteID` を更新、コンパクトならナビゲーションパスに積む。
