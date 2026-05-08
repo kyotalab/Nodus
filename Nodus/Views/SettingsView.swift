@@ -108,7 +108,7 @@ struct SettingsView: View {
 
     /// サポートリンクの暫定 URL。
     private var supportURL: URL {
-        URL(string: "mailto:kyouta.nakada@gmail.com")!
+        URL(string: "https://github.com/kyotalab/Nodus")!
     }
 
     /// 現在のフォルダ表示文字列。DEBUG シミュレータでは固定ラベルを返す。
