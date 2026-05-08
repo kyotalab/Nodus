@@ -45,7 +45,7 @@ struct NoteListView: View {
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
-        SearchEngine.search(searchQuery, in: store.notes)
+        SearchEngine.search(searchQuery, in: searchQuery.isEmpty ? store.notes : store.notesWithBody())
     }
 
     /// 検索後の結果に対して現在のソート順を適用した最終表示一覧。

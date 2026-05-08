@@ -332,6 +332,17 @@ final class NoteStore: ObservableObject {
         }
     }
 
+    /// 検索用に全ノートの本文を読み込んで返す。
+    /// クエリがあるときだけ呼ぶこと（全件読み込みのためコストが高い）。
+    func notesWithBody() -> [Note] {
+        return notes.map { note in
+            var n = note
+            // キャッシュ済みDocumentがあればそこから、なければファイルから読む。
+            n.body = cachedBody(for: note) ?? loadBody(for: note)
+            return n
+        }
+    }
+
     /// 現在キャッシュ中の NoteDocument の body を返す。
     /// UIDocument が外部変更を受け取って revert した後の最新値。
     func cachedBody(for note: Note) -> String? {
