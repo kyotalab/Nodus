@@ -11,7 +11,7 @@ import Foundation
 /// `List(selection:)` など分割ビューとの連携のため `Hashable` に準拠する。
 struct Note: Identifiable, Hashable {
     /// ファイル実体の URL。将来の iCloud Drive ファイル I/O の基準になる。
-    let url: URL
+    var url: URL
 
     /// Markdown 形式の本文
     var body: String

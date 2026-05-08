@@ -160,14 +160,15 @@ Settings
 ### External Change Behavior
 | State | Behavior |
 |-------|---------|
-| Preview mode | Auto-update to latest content immediately |
+| Preview mode | When `store.notes` reflects a newer `updatedAt` for the open note, `NoteDetailView` reloads `loadedBody` via `loadBody` (not while `isEditing`). |
 | Edit mode (keyboard visible) | Hold external changes — apply when user leaves edit mode |
+| Edit mode: external save while detail is open | `handleMetadataUpdate` debounces then calls `loadNotes()` and sets `lastExternalUpdateDate`. `NoteDetailView` uses `.onReceive(store.$lastExternalUpdateDate)` (not `onChange(of:)`) so updates propagate inside nested `NavigationStack` (`embedInNavigationStack`). While editing, external updates are logged (DEBUG) only; Nodus still saves local edits on disappear / autosave (last-write-wins). In preview, reloads `loadedBody` when it differs. `onChange(of: store.notes)` still refreshes preview when `updatedAt` advances. `hasExternalChange` remains for future conflict UI. v1.1+: conflict dialog (see `04_polish.md`). |
 
-## iCloud Container ID (placeholder)
+## iCloud Container ID
 ```
-iCloud.com.YOURNAME.Nodus
+iCloud.com.kyotanakada.Nodus
 ```
-> Replace YOURNAME with your Apple Developer Team ID before first build.
+> Single source of truth in code: `NodusICloudContainerIdentifier.string` (`FolderBookmark.swift`); must match Xcode entitlements.
 
 ## Testing Policy
 Full TDD is not adopted. Use **pinpoint testing** only.

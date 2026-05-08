@@ -5,10 +5,12 @@
 //  PHASE 2: 詳細ペインのプレースホルダー（エディタは後続フェーズ）
 //
 
+import Combine
 import SwiftUI
 
 /// 1件のノートの詳細。PHASE 4 では編集/プレビュー切替と自動保存を担う。
 struct NoteDetailView: View {
+    /// 一覧・保存など通常のストア参照用（親が `.environmentObject` で渡す）。
     @EnvironmentObject private var store: NoteStore
     /// Settings で選んだ初期エディタモード（edit / preview）を参照する。
     @AppStorage("defaultEditorMode") private var defaultEditorMode = "edit"
@@ -36,16 +38,20 @@ struct NoteDetailView: View {
     @State private var linkedNoteForNavigation: Note?
     /// wiki リンクからのプッシュ遷移を有効化するフラグ（`NavigationStack` + `NavigationLink` 案）。
     @State private var isNavigatingToLinkedNote = false
-    /// 画面初期表示時にだけ defaultEditorMode を適用するためのフラグ。
-    @State private var hasAppliedDefaultMode = false
     /// WKWebView プレビューの内容高さ（外側の ScrollView と二重スクロールを避ける）。
     @State private var markdownPreviewWebHeight: CGFloat = 200
+    /// メタデータ等でストアが一覧を取り直したタイミングを受け、編集中は保存抑止フラグだけ立てる。
+    @State private var hasExternalChange = false
 
     init(note: Note, embedInNavigationStack: Bool = false) {
         self.note = note
         self.embedInNavigationStack = embedInNavigationStack
         _currentNote = State(initialValue: note)
         _editingTitle = State(initialValue: note.title)
+        // defaultEditorMode は @AppStorage だが init では直接読めないため
+        // UserDefaults から直接取得して初期値に使う。
+        let savedMode = UserDefaults.standard.string(forKey: "defaultEditorMode") ?? "edit"
+        _isEditing = State(initialValue: savedMode != "preview")
     }
 
     var body: some View {
@@ -174,18 +180,17 @@ struct NoteDetailView: View {
                 }
             }
         .task(id: currentNote.id) {
-            // Settings の既定モードを初回表示時にだけ反映する。
-            if !hasAppliedDefaultMode {
-                isEditing = defaultEditorMode != "preview"
-                hasAppliedDefaultMode = true
-            }
+            hasExternalChange = false
 
             // DEBUG シミュレータのダミーデータは body を直接持つため、まずそちらを優先する。
             if !currentNote.body.isEmpty {
+                // DEBUG シミュレータのダミーデータは body を直接持つため優先する。
                 loadedBody = currentNote.body
             } else {
-                // 実ファイル運用時は従来どおり遅延ロードする。
-                loadedBody = store.loadBody(for: currentNote)
+                // UIDocument を await で開いてから body を読む。
+                // 同期版 loadBody では open() 完了前にキャッシュなしフォールバックが走り
+                // 空文字になることがあるため、非同期版を使う。
+                loadedBody = await store.loadBodyAsync(for: currentNote)
             }
             editingTitle = currentNote.title
 
@@ -197,10 +202,50 @@ struct NoteDetailView: View {
             // ノート切替時は WKWebView の高さを初期化し、前ノートのレイアウト残りを避ける。
             markdownPreviewWebHeight = 200
         }
+        // 一覧がメタデータ更新などで差し替わったとき、プレビュー表示用の本文を最新ファイルに追従させる（編集中は触らない）。
+        .onChange(of: store.notes) { _, newNotes in
+            // 編集モード中は外部変更を反映しない（v1.0 の方針。`loadedBody` を勝手に差し替えない）。
+            guard !isEditing else { return }
+
+            // 現在開いているノートと同一 ID の、ストア上の最新行を取る。
+            guard let latest = newNotes.first(where: { $0.id == currentNote.id }) else { return }
+
+            // ディスク側の更新時刻が進んでいれば、タスク初回ロード以降に溜まった古い `loadedBody` を捨てて再読込する。
+            if latest.updatedAt > currentNote.updatedAt {
+                currentNote = latest
+                // UIDocumentのキャッシュを優先する。キャッシュがなければファイルから読む。
+                let newBody = store.cachedBody(for: latest) ?? store.loadBody(for: latest)
+                loadedBody = newBody
+            }
+        }
+        // メタデータ経由で `loadNotes()` が走ったタイミングを Combine で購読する。
+        // `onChange(of: store.lastExternalUpdateDate)` は `NavigationStack` 内で発火しないことがあるため、
+        // `@Published` の `Publisher`（`$lastExternalUpdateDate`）へ直接 `onReceive` する。
+        .onReceive(store.$lastExternalUpdateDate) { date in
+            // 初期値 `.distantPast` のままの通知は無視する（初回購読時のノイズ対策）。
+            guard date > .distantPast else { return }
+            if isEditing {
+            } else {
+                // プレビュー中はファイルから本文を取り直し、一覧側のメタデータと表示を揃える。
+                let body = store.cachedBody(for: currentNote) ?? store.loadBody(for: currentNote)
+                if !body.isEmpty, body != loadedBody {
+                    loadedBody = body
+                    currentNote = store.notes.first(where: { $0.id == currentNote.id }) ?? currentNote
+                }
+            }
+        }
         .onDisappear {
-            // 画面離脱時に保留中の保存タスクを破棄し、内容は即時保存する。
+            // 画面離脱時はタイトル確定を先に行い、外部更新が無いときだけ本文を保存する。
             autosaveWorkItem?.cancel()
             commitTitle()
+            // UIDocument がキャッシュしている最新 body と loadedBody を比較する。
+            // 外部エディタが編集した内容が UIDocument に反映済みで、
+            // かつ loadedBody と異なる場合は外部変更を優先してスキップする。
+            if let cachedBody = store.cachedBody(for: currentNote),
+               !cachedBody.isEmpty,
+               cachedBody != loadedBody {
+                return
+            }
             saveImmediately()
         }
         .environment(\.openURL, OpenURLAction { url in
@@ -225,7 +270,18 @@ struct NoteDetailView: View {
         .onChange(of: isTitleFocused) { _, focused in
             // タイトルをタップしたら編集モードへ入り、離脱時はタイトル確定を行う。
             if focused {
-                isEditing = true
+                // 新規作成時の自動フォーカス（isTitleFocused = true）では
+                // 編集モードへの強制切替を行わない。
+                // ユーザーが意図的にタイトルをタップしたときだけ編集モードにする。
+                // 新規作成時は currentNote.title.isEmpty のため、
+                // プレビューモードでタイトル欄をタップした場合のみ isEditing = true にする。
+                if !isEditing {
+                    // プレビュー中にタイトルをタップした場合のみ編集モードへ切り替える。
+                    // ただし新規作成の自動フォーカスは title が空なので除外する。
+                    if !currentNote.title.isEmpty {
+                        isEditing = true
+                    }
+                }
             } else {
                 commitTitle()
             }
@@ -284,7 +340,12 @@ struct NoteDetailView: View {
     /// ツールバーおよび ⌘E と共通の、編集／プレビュー切替処理。
     private func toggleEditPreviewMode() {
         if isEditing {
-            // 編集からプレビューへ移るときは未保存内容を即時保存する。
+            // 1. まず外部変更があれば loadedBody を最新に更新する
+            let latest = store.cachedBody(for: currentNote) ?? store.loadBody(for: currentNote)
+            if !latest.isEmpty, latest != loadedBody {
+                loadedBody = latest
+            }
+            // 2. 最新の loadedBody で保存する
             saveImmediately()
         }
         isEditing.toggle()
@@ -327,8 +388,14 @@ struct NoteDetailView: View {
 
     /// 保存やリネーム後に、一覧側の最新メタデータを取り直して表示の一貫性を保つ。
     private func refreshCurrentNoteFromStore() {
-        if let latest = store.notes.first(where: { $0.id == currentNote.id }) {
-            currentNote = latest
+        guard let latest = store.notes.first(where: { $0.id == currentNote.id }) else { return }
+        // currentNote を丸ごと差し替えると .task(id:) が再起動するため、
+        // url と updatedAt だけを部分更新して @State の安定性を保つ。
+        if currentNote.url != latest.url {
+            currentNote.url = latest.url
+        }
+        if currentNote.updatedAt != latest.updatedAt {
+            currentNote.updatedAt = latest.updatedAt
         }
     }
 

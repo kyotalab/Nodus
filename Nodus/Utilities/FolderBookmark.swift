@@ -8,6 +8,11 @@
 import Combine
 import Foundation
 
+/// `Nodus.entitlements` の `com.apple.developer.icloud-container-identifiers` と一致させる。
+enum NodusICloudContainerIdentifier {
+    static let string = "iCloud.com.kyotanakada.Nodus"
+}
+
 /// 選択済みフォルダの bookmark を永続化し、起動時に復元する。
 @MainActor
 final class FolderBookmark: ObservableObject {

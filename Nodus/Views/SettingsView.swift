@@ -138,7 +138,7 @@ private struct SettingsFolderDocumentPicker: UIViewControllerRepresentable {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false
-        picker.directoryURL = FileManager.default.url(forUbiquityContainerIdentifier: nil)?
+        picker.directoryURL = FileManager.default.url(forUbiquityContainerIdentifier: NodusICloudContainerIdentifier.string)?
             .deletingLastPathComponent()
         return picker
     }

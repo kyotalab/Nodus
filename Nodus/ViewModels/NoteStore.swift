@@ -7,12 +7,16 @@
 
 import Combine
 import Foundation
+import UIKit
 
 /// ノート一覧の状態を保持し、ビューから `@EnvironmentObject` で参照する。
 @MainActor
 final class NoteStore: ObservableObject {
     /// 表示中のノート一覧。本文は遅延ロードのため初期値は空文字で保持する。
     @Published private(set) var notes: [Note] = []
+
+    /// メタデータ通知で一覧を取り直した時刻。詳細画面が「外部から一覧が動いた」と判断するための単純なシグナル。
+    @Published private(set) var lastExternalUpdateDate: Date = .distantPast
 
     /// security-scoped bookmark へのアクセス窓口。
     private var folderBookmark: FolderBookmark?
@@ -30,6 +34,12 @@ final class NoteStore: ObservableObject {
 
     /// `startAccessingSecurityScopedResource` が成功したか（対になる stop が必要）。
     private var didStartSecurityScopedAccessForMonitoring = false
+
+    /// 現在開いているノートの UIDocument キャッシュ。
+    /// ノートが切り替わるたびに close → open する。
+    private var openDocument: NoteDocument?
+    private var openDocumentURL: URL?
+    private var openDocumentStateObserver: NSObjectProtocol?
 
     /// 通知が短時間に連続するのをまとめるデバウンス用ワークアイテム。
     private var metadataReloadDebounceWorkItem: DispatchWorkItem?
@@ -103,6 +113,7 @@ final class NoteStore: ObservableObject {
                 // 新しい順で表示するため更新日時の降順で揃える。
                 return mapped.sorted { $0.updatedAt > $1.updatedAt }
             }
+
             notes = loadedNotes
         } catch {
             print("❌ NoteStore.loadNotes failed: \(error.localizedDescription)")
@@ -175,25 +186,24 @@ final class NoteStore: ObservableObject {
 #endif
 #endif
 
-        guard let folderBookmark else {
-            print("⚠️ NoteStore.saveNote: FolderBookmark is not configured.")
-            return
-        }
-
-        do {
-            let now = Date()
-            try folderBookmark.withScopedAccess { _ in
-                try note.body.write(to: note.url, atomically: true, encoding: .utf8)
+        Task {
+            do {
+                let doc = try await openDocument(for: note.url)
+                doc.body = note.body
+                // UIDocument の save が contents(forType:) を呼んでファイルに書く。
+                try await doc.save(to: note.url, for: .forOverwriting)
+                // store.notes の updatedAt を更新する。
+                await MainActor.run {
+                    if let index = notes.firstIndex(where: { $0.url == note.url }) {
+                        var updated = notes[index]
+                        updated.body = note.body
+                        updated.updatedAt = Date()
+                        notes[index] = updated
+                    }
+                }
+            } catch {
+                print("❌ saveNote error: \(error)")
             }
-
-            if let index = notes.firstIndex(where: { $0.url == note.url }) {
-                var updated = notes[index]
-                updated.body = note.body
-                updated.updatedAt = now
-                notes[index] = updated
-            }
-        } catch {
-            print("❌ NoteStore.saveNote failed: \(error.localizedDescription)")
         }
     }
 
@@ -295,19 +305,81 @@ final class NoteStore: ObservableObject {
 #endif
 #endif
 
-        guard let folderBookmark else {
-            print("⚠️ NoteStore.loadBody: FolderBookmark is not configured.")
-            return ""
+        // 同期的に読む必要があるため、キャッシュ済み Document を優先する。
+        // キャッシュがない場合は直接ファイルから読む（従来の実装）。
+        if let doc = openDocument, openDocumentURL == note.url {
+            return doc.body
         }
+        // フォールバック: 直接ファイル読み込み
+        return (try? String(contentsOf: note.url, encoding: .utf8)) ?? ""
+    }
 
+    /// UIDocument を open してから body を返す非同期版 loadBody。
+    /// .task 内など async コンテキストで使う。
+    func loadBodyAsync(for note: Note) async -> String {
+#if DEBUG
+#if targetEnvironment(simulator)
+        return notes.first(where: { $0.url == note.url })?.body ?? ""
+#endif
+#endif
         do {
-            return try folderBookmark.withScopedAccess { _ in
-                try String(contentsOf: note.url, encoding: .utf8)
-            }
+            let doc = try await openDocument(for: note.url)
+            return doc.body
         } catch {
-            print("❌ NoteStore.loadBody failed: \(error.localizedDescription)")
-            return ""
+            print("❌ loadBodyAsync error: \(error)")
+            // フォールバック: 直接ファイル読み込み
+            return (try? String(contentsOf: note.url, encoding: .utf8)) ?? ""
         }
+    }
+
+    /// 現在キャッシュ中の NoteDocument の body を返す。
+    /// UIDocument が外部変更を受け取って revert した後の最新値。
+    func cachedBody(for note: Note) -> String? {
+        guard let doc = openDocument, openDocumentURL == note.url else { return nil }
+        return doc.body
+    }
+
+    /// 指定 URL の NoteDocument を開いて返す。
+    /// 同じ URL なら既存インスタンスを再利用する。
+    func openDocument(for url: URL) async throws -> NoteDocument {
+        // 同じ URL なら再利用
+        if let doc = openDocument, openDocumentURL == url {
+            return doc
+        }
+        // 別のノートに切り替わった場合は前の Document を閉じる
+        if let doc = openDocument {
+            await doc.close()
+        }
+        if let observer = openDocumentStateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            openDocumentStateObserver = nil
+        }
+        let doc = NoteDocument(fileURL: url)
+        try await doc.open() // UIDocument が load(fromContents:) を呼ぶ
+        // UIDocument が外部変更を revert したとき body が更新されるので、
+        // コールバック経由で lastExternalUpdateDate を更新する。
+        doc.onExternalChange = { [weak self] in
+            guard let self else { return }
+            print("📡 UIDocument: external change applied, body updated")
+            self.lastExternalUpdateDate = Date()
+        }
+        openDocument = doc
+        openDocumentURL = url
+
+        // UIDocument が外部変更を検知して revert したとき通知を受け取る。
+        openDocumentStateObserver = NotificationCenter.default.addObserver(
+            forName: UIDocument.stateChangedNotification,
+            object: doc,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            let state = doc.documentState
+            if state.contains(.inConflict) {
+                print("📡 UIDocument: conflict detected")
+                // TODO: v1.1で競合ダイアログを表示
+            }
+        }
+        return doc
     }
 
     // MARK: - メタデータ監視（STEP 5）
@@ -331,10 +403,15 @@ final class NoteStore: ObservableObject {
         monitoringScopedFolderURL = folderURL
 
         let query = NSMetadataQuery()
-        // ユーザーが選んだフォルダ（とそのサブフォルダ）だけを検索範囲にする。
-        query.searchScopes = [folderURL as NSURL]
-        // ファイル名が `.md` で終わるものに限定する。
-        query.predicate = NSPredicate(format: "%K ENDSWITH[c] '.md'", NSMetadataItemFSNameKey)
+        // 実機ではユーザー選択 URL を searchScopes に直接渡すと更新通知が来ないことがあるため、
+        // iCloud の ubiquitous スコープで拾い、パス接頭辞でフォルダを絞り込む。
+        query.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
+        query.predicate = NSPredicate(
+            format: "%K BEGINSWITH %@ AND %K ENDSWITH[c] '.md'",
+            NSMetadataItemPathKey,
+            folderURL.path,
+            NSMetadataItemFSNameKey
+        )
 
         let center = NotificationCenter.default
         let queue = OperationQueue.main
@@ -345,9 +422,10 @@ final class NoteStore: ObservableObject {
             object: query,
             queue: queue
         ) { [weak self] _ in
-            // 通知クロージャは非同期文脈のため、MainActor に戻してから更新処理を呼ぶ。
             Task { @MainActor [weak self] in
-                self?.handleMetadataUpdate()
+                guard let self else { return }
+                // 実際の結果走査と disableUpdates はデバウンス後の `handleMetadataUpdate` 内で行う。
+                self.handleMetadataUpdate()
             }
         }
         metadataQueryObservers.append(finishObserver)
@@ -358,9 +436,9 @@ final class NoteStore: ObservableObject {
             object: query,
             queue: queue
         ) { [weak self] _ in
-            // 通知クロージャは非同期文脈のため、MainActor に戻してから更新処理を呼ぶ。
             Task { @MainActor [weak self] in
-                self?.handleMetadataUpdate()
+                guard let self else { return }
+                self.handleMetadataUpdate()
             }
         }
         metadataQueryObservers.append(updateObserver)
@@ -391,11 +469,15 @@ final class NoteStore: ObservableObject {
     }
 
     /// メタデータの変化を受け取り、デバウンスしたうえで一覧を再読込する。
-    /// STEP 5 では編集モード保留は行わず、常に `loadNotes()` で同期する（編集時の保留は PHASE 4）。
+    /// クエリ結果の細かい走査は行わず、`loadNotes()` 後に `lastExternalUpdateDate` だけ進めてビューへ通知する。
     func handleMetadataUpdate() {
         metadataReloadDebounceWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            self?.loadNotes()
+            guard let self else { return }
+
+            self.loadNotes()
+            // メタデータ経由でディスク一覧を取り直したタイミングを表す（詳細の再読込／編集中の保存抑止に使う）。
+            self.lastExternalUpdateDate = Date()
         }
         metadataReloadDebounceWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + metadataReloadDebounceInterval, execute: work)

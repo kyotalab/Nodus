@@ -307,3 +307,13 @@ Implemented in-app via `.keyboardShortcut` (see `NoteListView`, `NoteDetailView`
 - プレビューモードのコードブロックにシンタックスハイライトを追加。
 - 実装方針: highlight.js を CDN から追加読み込み。
 - 優先度: 低
+
+### External Change Conflict Resolution (v1.1)
+- 編集モード中に外部変更を検知した場合、変更を保留する
+- 編集モードを離脱したタイミングで競合ダイアログを表示
+  - "Keep my edits"
+  - "Use external changes"
+- 実装方針:
+  - `@State private var pendingExternalBody: String?`
+  - `NSMetadataQuery` 検知時に `isEditing` が true なら保留
+  - モード切替・画面離脱時に競合チェック
