@@ -6,7 +6,7 @@ Last updated: 2026-05-07
 
 ## Overview
 
-Nodus ("the app") is a note-taking app developed by [YOUR NAME] ("I", "me").
+Nodus ("the app") is a note-taking app developed by Kyota Nakada ("I", "me").
 This Privacy Policy explains what data the app collects, how it is used, and your rights.
 
 ---
