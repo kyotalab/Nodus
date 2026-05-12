@@ -285,7 +285,28 @@ Implemented in-app via `.keyboardShortcut` (see `NoteListView`, `NoteDetailView`
 
 ---
 
+## 完了済み機能
+
+- ✅ wikiリンクIDコピー（一覧長押し・詳細...メニュー）
+- ✅ 共有機能改修（単一.mdファイルとして正しいファイル名で共有）
+- ✅ updatedAt不正更新の修正（hasUnsavedChangesガード）
+- ✅ 詳細画面から一覧に一気に戻る（Back to List）
+- ✅ 詳細画面から検索付きで一覧に戻る（Search Notes）
+
+---
+
 ## Future Improvements
+
+### 残り候補
+
+- ⏳ 競合ダイアログ（編集中に外部変更があった場合の選択UI）
+- ⏳ ノートのピン留め
+- ⏳ タグ機能（#タグ の一覧表示）
+- ⏳ バックリンク表示（このノートへのリンク一覧）
+- ⏳ ウィジェット（最近のノートへのクイックアクセス）
+- ⏳ Shortcuts連携
+- ⏳ フォント・テーマのカスタマイズ
+- ⏳ iCloud以外のストレージ対応（ローカルフォルダ）
 
 ### List Auto-continuation
 - 編集モードで Return キーを押したとき、前の行のリスト記号を自動継続する。

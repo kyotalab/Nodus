@@ -38,6 +38,7 @@ This loop is the core experience. Every design decision should support it.
 | Item | Detail |
 |------|--------|
 | Syntax | `[[ID]]` e.g. `[[202604271321]]` |
+| Copy | Long press on list row or `...` menu in detail → copies `[[timestampID]]` to clipboard |
 | Resolution | Partial match against filename |
 | Edit Mode | Plain text only — no tap interaction |
 | Preview Mode (resolved) | System blue, tappable → navigate to note |
@@ -131,6 +132,8 @@ Settings
 | Title Placement | Inline TextField at top of NoteDetailView (shown in both Edit and Preview) |
 | New Note Focus | If title is empty on open, auto-focus title field |
 | Preview Metadata | Show `Created` / `Updated` under body in preview mode only |
+| `...` menu | Copy Wiki Link / Back to List / Search Notes |
+| Share | Exports note as a single `.md` file via `UIActivityViewController`. Filename matches note filename (e.g. `202604271321 Title.md`). |
 
 ### Keyboard Toolbar Behavior
 | Button | Inserts | Cursor Position |
@@ -162,7 +165,7 @@ Settings
 |-------|---------|
 | Preview mode | When `store.notes` reflects a newer `updatedAt` for the open note, `NoteDetailView` reloads `loadedBody` via `loadBody` (not while `isEditing`). |
 | Edit mode (keyboard visible) | Hold external changes — apply when user leaves edit mode |
-| Edit mode: external save while detail is open | `handleMetadataUpdate` debounces then calls `loadNotes()` and sets `lastExternalUpdateDate`. `NoteDetailView` uses `.onReceive(store.$lastExternalUpdateDate)` (not `onChange(of:)`) so updates propagate inside nested `NavigationStack` (`embedInNavigationStack`). While editing, external updates are logged (DEBUG) only; Nodus still saves local edits on disappear / autosave (last-write-wins). In preview, reloads `loadedBody` when it differs. `onChange(of: store.notes)` still refreshes preview when `updatedAt` advances. `hasExternalChange` remains for future conflict UI. v1.1+: conflict dialog (see `04_polish.md`). |
+| Edit mode: external save while detail is open | `handleMetadataUpdate` debounces then calls `loadNotes()` and sets `lastExternalUpdateDate`. `NoteDetailView` subscribes via `.onReceive(store.$lastExternalUpdateDate)` (not `onChange(of:)`) so updates propagate inside nested `NavigationStack` (`embedInNavigationStack`). `onDisappear` skips `saveImmediately()` when `hasUnsavedChanges == false` to prevent unnecessary `updatedAt` updates. While editing, external updates are logged (DEBUG) only; Nodus still saves local edits on disappear / autosave when there are changes (last-write-wins). In preview, reloads `loadedBody` when it differs. `onChange(of: store.notes)` still refreshes preview when `updatedAt` advances. `hasExternalChange` remains for future conflict UI. v1.1+: conflict dialog (see `04_polish.md`). |
 
 ## iCloud Container ID
 ```

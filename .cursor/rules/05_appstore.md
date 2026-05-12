@@ -190,6 +190,21 @@ Prepare before submission.
 
 Set in Xcode: Project → Target → General → Version / Build
 
+### Release versioning (Nodus)
+
+- **MARKETING_VERSION** (user-facing): `1.1` (was `1.0` for initial store release)
+- **CURRENT_PROJECT_VERSION** (build): `3` — bump for every new binary uploaded to App Store Connect / TestFlight (follows the previous store build).
+
+---
+
+## v1.1 What's New
+
+- Copy Wiki Link: Long press on note list or tap ... in note detail to copy [[ID]] format link
+- Back to List: Return to note list instantly from any depth
+- Search Notes: Return to list with search bar activated
+- Fixed: Opening a note no longer updates its modification date
+- Fixed: Share now exports a single .md file with the correct filename
+
 ---
 
 ## Phase 6 Checklist
