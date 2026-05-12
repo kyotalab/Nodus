@@ -43,6 +43,8 @@ struct NoteDetailView: View {
     @State private var markdownPreviewWebHeight: CGFloat = 200
     /// メタデータ等でストアが一覧を取り直したタイミングを受け、編集中は保存抑止フラグだけ立てる。
     @State private var hasExternalChange = false
+    /// 共有シートの表示制御。
+    @State private var isSharePresented = false
 
     init(note: Note, embedInNavigationStack: Bool = false) {
         self.note = note
@@ -150,16 +152,17 @@ struct NoteDetailView: View {
                     .keyboardShortcut("e", modifiers: .command)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    // 共有ボタンは Edit の左隣（primaryAction では後から宣言したほうが中央寄り）に配置する。
-                    ShareLink(
-                        item: loadedBody,
-                        subject: Text(editingTitle.isEmpty ? currentNote.timestampID : editingTitle),
-                        message: Text(editingTitle.isEmpty ? "" : editingTitle)
-                    ) {
+                    Button {
+                        isSharePresented = true
+                    } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
-                    // 仕様どおり: VoiceOver 用「Share」（要件確認済み）。
                     .accessibilityLabel("Share")
+                    .sheet(isPresented: $isSharePresented) {
+                        if let url = makeShareFileURL() {
+                            ShareSheet(url: url)
+                        }
+                    }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -348,6 +351,20 @@ struct NoteDetailView: View {
         hasUnsavedChanges = false
     }
 
+    /// 共有用の一時 .md ファイルを作成してURLを返す。
+    /// ファイル名はノートのファイル名（例: 202604110833 タイトル.md）と同じにする。
+    private func makeShareFileURL() -> URL? {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(currentNote.filename)
+        do {
+            try loadedBody.write(to: tempURL, atomically: true, encoding: .utf8)
+            return tempURL
+        } catch {
+            print("❌ makeShareFileURL error: \(error)")
+            return nil
+        }
+    }
+
     /// キーボードツールバーの入力を本文末尾へ追加する（案A）。
     private func appendToEditor(_ text: String) {
         loadedBody += text
@@ -467,5 +484,22 @@ struct NoteDetailView: View {
         // 末尾に残った通常テキストを追加する。
         result += String(body[cursor...])
         return result
+    }
+
+    /// UIActivityViewController を SwiftUI から使うためのラッパー。
+    private struct ShareSheet: UIViewControllerRepresentable {
+        let url: URL
+
+        func makeUIViewController(context: Context) -> UIActivityViewController {
+            UIActivityViewController(
+                activityItems: [url],
+                applicationActivities: nil
+            )
+        }
+
+        func updateUIViewController(
+            _ uiViewController: UIActivityViewController,
+            context: Context
+        ) {}
     }
 }
