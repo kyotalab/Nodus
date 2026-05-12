@@ -7,6 +7,7 @@
 
 import Combine
 import SwiftUI
+import UIKit
 
 /// 1件のノートの詳細。PHASE 4 では編集/プレビュー切替と自動保存を担う。
 struct NoteDetailView: View {
@@ -159,6 +160,18 @@ struct NoteDetailView: View {
                     }
                     // 仕様どおり: VoiceOver 用「Share」（要件確認済み）。
                     .accessibilityLabel("Share")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button {
+                            UIPasteboard.general.string = "[[\(currentNote.timestampID)]]"
+                        } label: {
+                            Label("Copy Wiki Link", systemImage: "link")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("More options")
                 }
                 if isEditing {
                     ToolbarItemGroup(placement: .keyboard) {

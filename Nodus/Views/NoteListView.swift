@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// ノート一覧。iPad 等では `List(selection:)` で Split の詳細と同期し、
 /// iPhone（コンパクト幅）では `NavigationStack` + `NavigationPath` でプッシュ遷移する。
@@ -128,6 +129,13 @@ struct NoteListView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                UIPasteboard.general.string = "[[\(note.timestampID)]]"
+                            } label: {
+                                Label("Copy Wiki Link", systemImage: "link")
+                            }
+                        }
                         .accessibilityLabel(noteRowAccessibilityLabel(for: note))
                         .tag(Optional(note.id))
                 }
@@ -216,6 +224,13 @@ struct NoteListView: View {
                                 noteToDelete = note
                             } label: {
                                 Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            Button {
+                                UIPasteboard.general.string = "[[\(note.timestampID)]]"
+                            } label: {
+                                Label("Copy Wiki Link", systemImage: "link")
                             }
                         }
                     }
