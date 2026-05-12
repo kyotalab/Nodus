@@ -43,6 +43,8 @@ struct NoteListView: View {
     @State private var noteToDelete: Note?
     /// Settings シートの表示状態。
     @State private var isShowingSettings = false
+    /// 検索バーのフォーカス状態。
+    @State private var isSearchFocused: Bool = false
 
     /// SearchEngine を使って、クエリに応じた一覧をリアルタイムで作る。
     private var filteredNotes: [Note] {
@@ -239,6 +241,7 @@ struct NoteListView: View {
             // iPhone 系レイアウトにも検索バーを常時表示する。
             .searchable(
                 text: $searchQuery,
+                isPresented: $isSearchFocused,
                 placement: .navigationBarDrawer(displayMode: .always)
             )
             // コンパクト表示でも検索入力時の自動大文字化を無効化する。
@@ -289,6 +292,17 @@ struct NoteListView: View {
                         store.deleteNote(note)
                     }
                 )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .nodusPopToRoot)) { _ in
+                // 一覧のルートに戻る
+                compactNavigationPath.removeLast(compactNavigationPath.count)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .nodusActivateSearch)) { _ in
+                // 一覧のルートに戻ってから検索バーをアクティブにする
+                compactNavigationPath.removeLast(compactNavigationPath.count)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isSearchFocused = true
+                }
             }
         }
     }

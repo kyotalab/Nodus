@@ -171,6 +171,16 @@ struct NoteDetailView: View {
                         } label: {
                             Label("Copy Wiki Link", systemImage: "link")
                         }
+                        Button {
+                            NotificationCenter.default.post(name: .nodusPopToRoot, object: nil)
+                        } label: {
+                            Label("Back to List", systemImage: "list.bullet")
+                        }
+                        Button {
+                            NotificationCenter.default.post(name: .nodusActivateSearch, object: nil)
+                        } label: {
+                            Label("Search Notes", systemImage: "magnifyingglass")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -502,4 +512,9 @@ struct NoteDetailView: View {
             context: Context
         ) {}
     }
+}
+
+extension Notification.Name {
+    static let nodusPopToRoot = Notification.Name("nodusPopToRoot")
+    static let nodusActivateSearch = Notification.Name("nodusActivateSearch")
 }
