@@ -238,6 +238,10 @@ struct NoteDetailView: View {
             // 画面離脱時はタイトル確定を先に行い、外部更新が無いときだけ本文を保存する。
             autosaveWorkItem?.cancel()
             commitTitle()
+            // 未保存変更がない場合は保存をスキップする。
+            // 内容が変わっていないのに saveNote() を呼ぶと
+            // updatedAt が更新されてソート順が変わるため。
+            guard hasUnsavedChanges else { return }
             // UIDocument がキャッシュしている最新 body と loadedBody を比較する。
             // 外部エディタが編集した内容が UIDocument に反映済みで、
             // かつ loadedBody と異なる場合は外部変更を優先してスキップする。
