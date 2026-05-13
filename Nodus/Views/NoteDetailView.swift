@@ -43,6 +43,11 @@ struct NoteDetailView: View {
     @State private var markdownPreviewWebHeight: CGFloat = 200
     /// メタデータ等でストアが一覧を取り直したタイミングを受け、編集中は保存抑止フラグだけ立てる。
     @State private var hasExternalChange = false
+    /// キーボードツールバーからカーソル位置に挿入するテキスト。
+    /// MarkdownTextView が受け取って挿入後に nil にリセットする。
+    @State private var toolbarInsertionText: String? = nil
+    /// エディタのフォーカス状態（MarkdownTextView との双方向バインディング用）。
+    @State private var isEditorFocusedState: Bool = false
     /// 共有シートの表示制御。
     @State private var isSharePresented = false
 
@@ -84,16 +89,16 @@ struct NoteDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        TextEditor(text: $loadedBody)
-                            .font(.system(.body, design: .monospaced))
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($isEditorFocused)
-                            .onChange(of: loadedBody) { _, _ in
-                                // 本文が変化したら未保存フラグを立てる。
-                                hasUnsavedChanges = true
-                                scheduleAutosave()
-                            }
+                        MarkdownTextView(
+                            text: $loadedBody,
+                            insertionText: $toolbarInsertionText,
+                            isFocused: $isEditorFocusedState
+                        )
+                        .onChange(of: loadedBody) { _, _ in
+                            // 本文が変化したら未保存フラグを立てる。
+                            hasUnsavedChanges = true
+                            scheduleAutosave()
+                        }
                     }
                     .padding(.horizontal, 8)
                 } else {
@@ -186,24 +191,6 @@ struct NoteDetailView: View {
                     }
                     .accessibilityLabel("More options")
                 }
-                if isEditing {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        // 案A: カーソル厳密制御は行わず、入力テキストを末尾に追加する。
-                        Button("#") { appendToEditor("# ") }
-                            .accessibilityLabel("Insert heading")
-                        Button("**") { appendToEditor("****") }
-                            .accessibilityLabel("Insert bold")
-                        Button("*") { appendToEditor("**") }
-                            .accessibilityLabel("Insert italic")
-                        Button(">") { appendToEditor("> ") }
-                            .accessibilityLabel("Insert blockquote")
-                        Button("[[") { appendToEditor("[[]]") }
-                            .accessibilityLabel("Insert wiki link")
-                        Button("⇥") { appendToEditor("\t") }
-                            .accessibilityLabel("Insert tab")
-                        Spacer()
-                    }
-                }
             }
         .task(id: currentNote.id) {
             hasExternalChange = false
@@ -295,7 +282,7 @@ struct NoteDetailView: View {
         })
         .onChange(of: isEditing) { _, newValue in
             // モード切替後の入力体験を安定させるため、編集モードに戻ったらフォーカスを戻す。
-            isEditorFocused = newValue
+            isEditorFocusedState = newValue
         }
         .onChange(of: isTitleFocused) { _, focused in
             // タイトルをタップしたら編集モードへ入り、離脱時はタイトル確定を行う。
@@ -377,8 +364,9 @@ struct NoteDetailView: View {
 
     /// キーボードツールバーの入力を本文末尾へ追加する（案A）。
     private func appendToEditor(_ text: String) {
-        loadedBody += text
-        isEditorFocused = true
+        // カーソル位置への挿入を MarkdownTextView に委譲する
+        toolbarInsertionText = text
+        isEditorFocusedState = true
     }
 
     /// ツールバーおよび ⌘E と共通の、編集／プレビュー切替処理。
