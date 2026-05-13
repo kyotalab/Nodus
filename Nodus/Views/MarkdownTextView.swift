@@ -24,8 +24,20 @@ struct MarkdownTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
 
+        // iOS の自動フォーマット（Markdownレンダリング）を無効化する
+        if #available(iOS 16.0, *) {
+            textView.isFindInteractionEnabled = false
+        }
+        textView.typingAttributes = [
+            .font: UIFont.monospacedSystemFont(
+                ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize,
+                weight: .regular
+            ),
+            .foregroundColor: UIColor.label,
+        ]
+
         // キーボードツールバーを inputAccessoryView として設定する
-        textView.inputAccessoryView = makeToolbar(for: textView, coordinator: context.coordinator)
+        textView.inputAccessoryView = makeCurrentToolbar(coordinator: context.coordinator)
 
         return textView
     }
@@ -38,7 +50,13 @@ struct MarkdownTextView: UIViewRepresentable {
         if textView.text != text {
             let selectedRange = textView.selectedRange
             textView.text = text
-            // 可能であればカーソル位置を復元する
+            textView.typingAttributes = [
+                .font: UIFont.monospacedSystemFont(
+                    ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize,
+                    weight: .regular
+                ),
+                .foregroundColor: UIColor.label,
+            ]
             if selectedRange.location <= (text as NSString).length {
                 textView.selectedRange = selectedRange
             }
@@ -56,34 +74,41 @@ struct MarkdownTextView: UIViewRepresentable {
         Coordinator(self)
     }
 
-    private func makeToolbar(for textView: UITextView, coordinator: Coordinator) -> UIView {
-        let toolbar = UIInputView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 44), inputViewStyle: .keyboard)
-        toolbar.allowsSelfSizing = true
+    private func makeCurrentToolbar(coordinator: Coordinator) -> UIView {
+        if coordinator.isExpandedPanelVisible {
+            return makeExpandedToolbar(coordinator: coordinator)
+        } else {
+            return makeNormalToolbar(coordinator: coordinator)
+        }
+    }
 
+    private func makeNormalToolbar(coordinator: Coordinator) -> UIInputView {
+        let toolbar = UIInputView(
+            frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 44),
+            inputViewStyle: .keyboard
+        )
+        // ダークモード対応の背景色を設定する
+        toolbar.backgroundColor = UIColor.systemBackground
         let items: [(title: String, insertion: String)] = [
-            ("#", "# "),
-            ("**", "****"),
-            ("*", "**"),
-            (">", "> "),
-            ("[[", "[[]]"),
-            ("⇥", "\t"),
+            ("#", "# "), ("**", "****"), ("*", "**"),
+            (">", "> "), ("[[", "[[]]"), ("⇥", "\t"),
         ]
-
         let stackView = UIStackView()
         stackView.axis = .horizontal
         stackView.distribution = .fillEqually
         stackView.translatesAutoresizingMaskIntoConstraints = false
-
+        stackView.spacing = 6
+        stackView.layoutMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        stackView.isLayoutMarginsRelativeArrangement = true
         for item in items {
-            let button = UIButton(type: .system)
-            button.setTitle(item.title, for: .normal)
-            button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
-            // insertion テキストをタグではなく accessibilityIdentifier で保持する
-            button.accessibilityIdentifier = item.insertion
-            button.addTarget(coordinator, action: #selector(Coordinator.toolbarButtonTapped(_:)), for: .touchUpInside)
-            stackView.addArrangedSubview(button)
+            stackView.addArrangedSubview(makeToolbarButton(
+                title: item.title, insertion: item.insertion, coordinator: coordinator))
         }
-
+        let expandButton = UIButton(type: .system)
+        expandButton.setTitle("≡", for: .normal)
+        expandButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .regular)
+        expandButton.addTarget(coordinator, action: #selector(Coordinator.toggleExpandedPanel), for: .touchUpInside)
+        stackView.addArrangedSubview(expandButton)
         toolbar.addSubview(stackView)
         NSLayoutConstraint.activate([
             stackView.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor),
@@ -91,27 +116,99 @@ struct MarkdownTextView: UIViewRepresentable {
             stackView.topAnchor.constraint(equalTo: toolbar.topAnchor),
             stackView.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor),
         ])
-
         return toolbar
+    }
+
+    private func makeExpandedToolbar(coordinator: Coordinator) -> UIInputView {
+        let toolbar = UIInputView(
+            frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 132),
+            inputViewStyle: .keyboard
+        )
+        // ダークモード対応の背景色を設定する
+        toolbar.backgroundColor = UIColor.secondarySystemBackground
+        let rows: [[(title: String, insertion: String)]] = [
+            [("H1", "# "), ("H2", "## "), ("H3", "### "), ("B", "****"), ("I", "**"), ("S", "~~~~")],
+            [
+                ("-", "- "), ("1.", "1. "), ("[ ]", "- [ ] "), ("`", "```\n\n```"),
+                ("Table", "| Header | Header |\n| ------ | ------ |\n| Cell   | Cell   |\n"),
+            ],
+        ]
+        let outerStack = UIStackView()
+        outerStack.axis = .vertical
+        outerStack.distribution = .fillEqually
+        outerStack.translatesAutoresizingMaskIntoConstraints = false
+        for row in rows {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.distribution = .fillEqually
+            for item in row {
+                rowStack.addArrangedSubview(makeToolbarButton(
+                    title: item.title, insertion: item.insertion, coordinator: coordinator))
+            }
+            outerStack.addArrangedSubview(rowStack)
+        }
+        let closeButton = UIButton(type: .system)
+        closeButton.setTitle("✕ Close", for: .normal)
+        closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        closeButton.addTarget(coordinator, action: #selector(Coordinator.toggleExpandedPanel), for: .touchUpInside)
+        closeButton.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        let mainStack = UIStackView(arrangedSubviews: [outerStack, closeButton])
+        mainStack.axis = .vertical
+        mainStack.distribution = .fill
+        mainStack.spacing = 4
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.layoutMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        mainStack.isLayoutMarginsRelativeArrangement = true
+        toolbar.addSubview(mainStack)
+        NSLayoutConstraint.activate([
+            mainStack.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor),
+            mainStack.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor),
+            mainStack.topAnchor.constraint(equalTo: toolbar.topAnchor),
+            mainStack.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor),
+        ])
+        return toolbar
+    }
+
+    private func makeToolbarButton(title: String, insertion: String, coordinator: Coordinator) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 17, weight: .medium)
+        button.accessibilityIdentifier = insertion
+
+        // ボタンの背景・角丸・ボーダーを設定してキーボードキーのように見せる
+        button.backgroundColor = UIColor.tertiarySystemBackground
+        button.layer.cornerRadius = 6
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.separator.cgColor
+
+        // ボタン間のマージン
+        button.contentEdgeInsets = UIEdgeInsets(top: 4, left: 2, bottom: 4, right: 2)
+
+        button.addTarget(coordinator, action: #selector(Coordinator.toolbarButtonTapped(_:)), for: .touchUpInside)
+        return button
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: MarkdownTextView
         weak var textView: UITextView?
+        var isExpandedPanelVisible = false
 
         init(_ parent: MarkdownTextView) {
             self.parent = parent
         }
 
+        @objc func toggleExpandedPanel() {
+            isExpandedPanelVisible.toggle()
+            // inputAccessoryView を差し替えて再表示
+            textView?.inputAccessoryView = parent.makeCurrentToolbar(coordinator: self)
+            textView?.reloadInputViews()
+        }
+
         @objc func toolbarButtonTapped(_ sender: UIButton) {
             guard let insertion = sender.accessibilityIdentifier else { return }
             guard let textView else { return }
-
-            // カーソル位置に直接挿入する
             if let selectedRange = textView.selectedTextRange {
                 textView.replace(selectedRange, withText: insertion)
-
-                // ****や[[]]はカーソルを中央に移動する
                 let pairsNeedingCursorCenter = ["****", "**", "[[]]"]
                 if pairsNeedingCursorCenter.contains(insertion) {
                     let halfLength = insertion.count / 2
@@ -120,7 +217,6 @@ struct MarkdownTextView: UIViewRepresentable {
                         textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
                     }
                 }
-
                 parent.text = textView.text
             }
         }
