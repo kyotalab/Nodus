@@ -60,6 +60,8 @@ struct MarkdownTextView: UIViewRepresentable {
             if selectedRange.location <= (text as NSString).length {
                 textView.selectedRange = selectedRange
             }
+            // ノート切替時にもハイライトを適用する
+            context.coordinator.applyHighlighting(to: textView)
         }
 
         // フォーカス制御
@@ -311,8 +313,84 @@ struct MarkdownTextView: UIViewRepresentable {
             return nil
         }
 
+        /// Markdown ハイライトを適用する。
+        /// 日本語入力中はスキップしてカーソル崩れを防ぐ。
+        func applyHighlighting(to textView: UITextView) {
+            // 日本語入力中（変換候補が表示されている間）はスキップ
+            guard textView.markedTextRange == nil else { return }
+
+            let text = textView.text ?? ""
+            let selectedRange = textView.selectedRange
+
+            let baseFont = UIFont.monospacedSystemFont(
+                ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize,
+                weight: .regular
+            )
+            let baseColor = UIColor.label
+
+            let attributed = NSMutableAttributedString(
+                string: text,
+                attributes: [
+                    .font: baseFont,
+                    .foregroundColor: baseColor,
+                ]
+            )
+
+            // ハイライトルール（順番に適用）
+            let rules: [(pattern: String, attributes: [NSAttributedString.Key: Any])] = [
+                // 見出し H1〜H3
+                ("^#{1,3} .+$",
+                 [.font: UIFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .bold),
+                  .foregroundColor: UIColor.label]),
+
+                // 太字 **text**
+                ("\\*\\*.+?\\*\\*",
+                 [.font: UIFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .bold)]),
+
+                // 斜体 *text*
+                ("(?<!\\*)\\*(?!\\*).+?(?<!\\*)\\*(?!\\*)",
+                 [.obliqueness: 0.2]),
+
+                // インラインコード `text`
+                ("`[^`]+`",
+                 [.foregroundColor: UIColor.systemOrange]),
+
+                // 引用 > text
+                ("^>.+$",
+                 [.foregroundColor: UIColor.secondaryLabel]),
+
+                // wikiリンク [[ID]]
+                ("\\[\\[.+?\\]\\]",
+                 [.foregroundColor: UIColor.systemBlue]),
+
+                // タグ #word
+                ("(?<![\\w])#[\\w-]+",
+                 [.foregroundColor: UIColor.systemGreen]),
+            ]
+
+            let options: NSRegularExpression.Options = [.anchorsMatchLines]
+            for rule in rules {
+                guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: options) else { continue }
+                let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+                for match in matches {
+                    attributed.addAttributes(rule.attributes, range: match.range)
+                }
+            }
+
+            // attributedText の更新（カーソル位置を保持）
+            textView.attributedText = attributed
+            textView.selectedRange = selectedRange
+
+            // typingAttributes をリセットして新規入力のスタイルを維持
+            textView.typingAttributes = [
+                .font: baseFont,
+                .foregroundColor: baseColor,
+            ]
+        }
+
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
+            applyHighlighting(to: textView)
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
