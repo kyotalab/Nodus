@@ -221,6 +221,96 @@ struct MarkdownTextView: UIViewRepresentable {
             }
         }
 
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            // Return キー以外は通常処理
+            guard text == "\n" else { return true }
+
+            let nsText = textView.text as NSString
+            let currentText = nsText as String
+
+            // カーソル位置から現在行の先頭を探す
+            let cursorPosition = range.location
+            let lineStart = nsText.lineRange(for: NSRange(location: cursorPosition, length: 0)).location
+
+            // 現在行のテキストを取得
+            let lineRange = nsText.lineRange(for: NSRange(location: cursorPosition, length: 0))
+            let currentLine = nsText.substring(with: NSRange(
+                location: lineRange.location,
+                length: cursorPosition - lineRange.location
+            ))
+
+            // 自動補完パターンを判定する
+            if let prefix = autoCompletePrefix(for: currentLine) {
+                if prefix.isEmpty {
+                    // 補完キャンセル: 現在行のプレフィックスを削除して空行にする
+                    let lineStartIndex = currentText.index(currentText.startIndex, offsetBy: lineRange.location)
+                    let cursorIndex = currentText.index(currentText.startIndex, offsetBy: cursorPosition)
+                    let newText = currentText.replacingCharacters(
+                        in: lineStartIndex..<cursorIndex,
+                        with: ""
+                    )
+                    textView.text = newText
+                    // カーソルを行頭に移動
+                    let newPosition = textView.position(
+                        from: textView.beginningOfDocument,
+                        offset: lineRange.location
+                    )
+                    if let pos = newPosition {
+                        textView.selectedTextRange = textView.textRange(from: pos, to: pos)
+                    }
+                    parent.text = textView.text
+                    return false
+                } else {
+                    // 改行 + 補完プレフィックスを挿入
+                    let insertion = "\n" + prefix
+                    if let selectedRange = textView.selectedTextRange {
+                        textView.replace(selectedRange, withText: insertion)
+                    }
+                    parent.text = textView.text
+                    return false
+                }
+            }
+
+            return true
+        }
+
+        /// 現在行のテキストから自動補完プレフィックスを返す。
+        /// - Returns: 補完する文字列。空文字の場合は補完キャンセル。nil の場合は補完なし。
+        private func autoCompletePrefix(for line: String) -> String? {
+            // タスクリスト: - [ ] または - [x]
+            if line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") {
+                // プレフィックスのみの行（テキストなし）→ 補完キャンセル
+                if line == "- [ ] " || line == "- [x] " {
+                    return ""
+                }
+                return "- [ ] "
+            }
+
+            // 箇条書き: -（スペース）
+            if line.hasPrefix("- ") {
+                if line == "- " {
+                    return ""
+                }
+                return "- "
+            }
+
+            // 番号付きリスト: 数字.（スペース）
+            let numberRegex = try? NSRegularExpression(pattern: "^(\\d+)\\. ")
+            let nsLine = line as NSString
+            if let match = numberRegex?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+                let numberRange = match.range(at: 1)
+                let numberString = nsLine.substring(with: numberRange)
+                let prefix = "\(numberString). "
+                if line == prefix {
+                    return ""
+                }
+                let nextNumber = (Int(numberString) ?? 1) + 1
+                return "\(nextNumber). "
+            }
+
+            return nil
+        }
+
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
         }
